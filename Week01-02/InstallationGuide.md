@@ -135,6 +135,7 @@ You can connect an external screen, keyboard, and mouse to the robot, then switc
 - Razer graphic cards might have issues with the VM/gazebo/RViz (crashes without apparent error messages).
 - If running the VM on a Mac, and encounter a "Kernel Driver Not Installed (rc=-1908 error)" follow [this guide](https://www.howtogeek.com/658047/how-to-fix-virtualboxs-%E2%80%9Ckernel-driver-not-installed-rc-1908-error/) to fix the issue.
 - If using the PenguinPi robot in person, please be gentle as they can be quite fragile
+- If installing from scratch and the command to install Gazebo: "curl -sSL http://get.gazebosim.org | sh" does nothing, follow the instructions under "Alternative installation: step-by-step" in http://gazebosim.org/tutorials?tut=install_ubuntu 
 
 # Acknowledgement
 Part of the lab sessions are inspired by the Robotic Vision Summer School: https://www.rvss.org.au/
