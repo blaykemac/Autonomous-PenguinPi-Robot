@@ -31,5 +31,5 @@ This command will open a GUI with the robot's camera view shown.
   - Drive backward +20pt
   - Turn left +20pt
   - Turn right +20pt
-- Demonstration (20pt): demonstrate your teleoperation in the simulator or on the physical robot to the demonstrators during Week 3 lab session. You will be awarded a 10pt bonus if you can demonstrate your soluation on the physical robot. Max M1 score is 100pts.
+- Demonstration (20pt): demonstrate your teleoperation in the simulator or on the physical robot to the demonstrators during Week 3 lab session.
 
