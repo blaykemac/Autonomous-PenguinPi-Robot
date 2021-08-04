@@ -137,15 +137,19 @@ class Operate:
             ############### add your codes below ###############
             # drive forward
             if event.type == pygame.KEYDOWN and event.key == pygame.K_UP:
+                self.command['motion'] = [3, 0]
                 pass # TODO: replace with your code to make the robot drive forward
             # drive backward
             elif event.type == pygame.KEYDOWN and event.key == pygame.K_DOWN:
+                self.command['motion'] = [-3, 0]
                 pass # TODO: replace with your code to make the robot drive backward
             # turn left
             elif event.type == pygame.KEYDOWN and event.key == pygame.K_LEFT:
+                self.command['motion'] = [0, 2]
                 pass # TODO: replace with your code to make the robot turn left
             # drive right
             elif event.type == pygame.KEYDOWN and event.key == pygame.K_RIGHT:
+                self.command['motion'] = [0, -2]
                 pass # TODO: replace with your code to make the robot turn right
             ####################################################
             # stop
