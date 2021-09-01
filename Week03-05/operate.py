@@ -80,6 +80,7 @@ class Operate:
             self.data.write_keyboard(lv, rv)
         dt = time.time() - self.control_clock
         drive_meas = measure.Drive(lv, rv, dt)
+        #drive_meas = measure.Drive(lv, rv, dt)
         self.control_clock = time.time()
         return drive_meas
     # camera control
@@ -194,16 +195,19 @@ class Operate:
             ########### replace with your M1 codes ###########
             # drive forward
             if event.type == pygame.KEYDOWN and event.key == pygame.K_UP:
-                self.command['motion'] = [3, 0] # TODO: replace with your M1 code to make the robot drive forward
+                self.command['motion'] = [2, 0]
+                pass # TODO: replace with your code to make the robot drive forward
             # drive backward
             elif event.type == pygame.KEYDOWN and event.key == pygame.K_DOWN:
-                self.command['motion'] = [-3, 0] # TODO: replace with your M1 code to make the robot drive backward
+                self.command['motion'] = [-2, 0]
+                pass # TODO: replace with your code to make the robot drive backward
             # turn left
             elif event.type == pygame.KEYDOWN and event.key == pygame.K_LEFT:
-                self.command['motion'] = [0, 2] # TODO: replace with your M1 code to make the robot turn left
+                self.command['motion'] = [0, 2]
+                pass # TODO: replace with your code to make the robot turn left
             # drive right
             elif event.type == pygame.KEYDOWN and event.key == pygame.K_RIGHT:
-                self.command['motion'] = [0, -2] # TODO: replace with your M1 code to make the robot turn right
+                self.command['motion'] = [0, -2]
             ####################################################
             # stop
             elif event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE:

@@ -91,6 +91,7 @@ class EKF:
         x = self.get_state_vector()
 
         # TODO: add your codes here to compute the predicted x
+
         Q = self.predict_covariance(raw_drive_meas)
         self.P = F @ self.P @ F.T + Q
         
@@ -105,7 +106,7 @@ class EKF:
         pred_state[2] = update_state[2]
         
         self.set_state_vector(pred_state)
-        
+
     # the update step of EKF
     def update(self, measurements):
         if not measurements:
@@ -145,10 +146,10 @@ class EKF:
         F[0:3,0:3] = self.robot.derivative_drive(raw_drive_meas)
         return F
     
-    def predict_covariance(self, raw_drive_meas, pert = 0.01):
+    def predict_covariance(self, raw_drive_meas):
         n = self.number_landmarks()*2 + 3
         Q = np.zeros((n,n))
-        Q[0:3,0:3] = self.robot.covariance_drive(raw_drive_meas)+ pert*np.eye(3)
+        Q[0:3,0:3] = self.robot.covariance_drive(raw_drive_meas)+ 0.001*np.eye(3)
         return Q
 
     def add_landmarks(self, measurements):
