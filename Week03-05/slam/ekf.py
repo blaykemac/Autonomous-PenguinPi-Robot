@@ -98,6 +98,7 @@ class EKF:
         
         #update_state = self.robot.get_state()
         # Delete later??
+        ''''
         update_state = self.robot.state
         pred_state = x
         pred_state[0] = update_state[0]
@@ -105,6 +106,7 @@ class EKF:
         pred_state[2] = update_state[2]
         
         self.set_state_vector(pred_state)
+        '''
         
     # the update step of EKF
     def update(self, measurements):
@@ -145,10 +147,21 @@ class EKF:
         F[0:3,0:3] = self.robot.derivative_drive(raw_drive_meas)
         return F
     
-    def predict_covariance(self, raw_drive_meas, pert = 0.01):
+    def predict_covariance(self, raw_drive_meas, pert = 0.001):
         n = self.number_landmarks()*2 + 3
         Q = np.zeros((n,n))
-        Q[0:3,0:3] = self.robot.covariance_drive(raw_drive_meas)+ pert*np.eye(3)
+        theta_cov = 0.002
+        theta_matrix = np.zeros((3,3))
+        theta_matrix[2, 2] = theta_cov
+        linear_velocity, angular_velocity = self.robot.convert_wheel_speeds(raw_drive_meas.left_speed, raw_drive_meas.right_speed)
+        epsilon = 0.0001
+        pert_theta = 1
+        if linear_velocity < epsilon and angular_velocity < epsilon:
+            pert = 0.0
+            pert_theta = 0.0
+        
+        Q[0:3,0:3] = self.robot.covariance_drive(raw_drive_meas)+ pert*np.eye(3)  + pert_theta*theta_matrix
+        #Q[0:3,0:3] = self.robot.covariance_drive(raw_drive_meas)+ pert*np.eye(3) + theta_matrix
         return Q
 
     def add_landmarks(self, measurements):
@@ -165,8 +178,12 @@ class EKF:
                 # ignore known tags
                 continue
             
-            lm_bff = lm.position
+            offset = np.zeros((2,1))
+            offset[0] = -0.08
+            lm_bff = lm.position #+ offset
             lm_inertial = robot_xy + R_theta @ lm_bff
+            
+            print(f"{lm.position}, {offset}, {lm_bff}, {lm_inertial}, {robot_xy}")
 
             self.taglist.append(int(lm.tag))
             self.markers = np.concatenate((self.markers, lm_inertial), axis=1)
