@@ -4,7 +4,7 @@ import json
 import os
 from pathlib import Path
 import ast
-# import cv2
+import cv2
 import math
 from machinevisiontoolbox import Image
 
@@ -72,6 +72,7 @@ def estimate_pose(base_dir, camera_matrix, completed_img_dict):
     target_list = ['apple', 'lemon', 'person']
 
     target_pose_dict = {}
+    
     # for each target in each detection output, estimate its pose
     for target_num in completed_img_dict.keys():
         box = completed_img_dict[target_num]['target'] # [[x],[y],[width],[height]]
@@ -81,10 +82,40 @@ def estimate_pose(base_dir, camera_matrix, completed_img_dict):
         ######### Replace with your codes #########
         # TODO: compute pose of the target based on bounding box info and robot's pose
         target_pose = {'y': 0.0, 'x': 0.0}
+        image_width = 640
+        image_height = 480
+        
+        u0 = image_width / 2
+        v0 = image_height / 2
+        
+        u = box[0][0] - u0
+        v = v0 - (box[1][0] + box[3][0] / 2)
+         
+        uprime = box[0][0] - u0
+        vprime = v0 - (box[1][0] - box[3][0] / 2)
+        
+        OB = np.array([focal_length, u, v])
+        
+        k = true_height / (vprime - v)
+        
+        OBprime = k * OB
+        OBprime_corrected = OBprime
+        OBprime_corrected[1] *= -1
+        
+        th = robot_pose[2][0]
+        robot_xy = np.block([robot_pose[0], robot_pose[1]])
+        R_theta = np.block([[np.cos(th), -np.sin(th)],[np.sin(th), np.cos(th)]])
+        lm_bff = OBprime[0:2].T
+        OB_world = robot_xy + R_theta @ lm_bff
+        
+        target_pose['x'] = OB_world[0]
+        target_pose['y'] = OB_world[1]
         
         target_pose_dict[target_list[target_num-1]] = target_pose
+        
+        print(target_pose)
         ###########################################
-    
+
     return target_pose_dict
 
 # merge the estimations of the targets so that there are at most 3 estimations of each target type
@@ -105,13 +136,37 @@ def merge_estimations(target_pose_dict):
 
     ######### Replace with your codes #########
     # TODO: the operation below takes the first three estimations of each target type, replace it with a better merge solution
-    if len(apple_est) > 3:
-        apple_est = apple_est[0:3]
-    if len(lemon_est) > 3:
-        lemon_est = lemon_est[0:3]
-    if len(person_est) > 3:
-        person_est = person_est[0:3]
     
+    k_apple = min(len(apple_est), 3)
+    k_lemon = min(len(lemon_est), 3)
+    k_person = min(len(person_est), 3)
+    
+    epsilon = 1E-3
+    k = 3
+    attempts = 10
+    criteria = (cv2.TERM_CRITERIA_MAX_ITER, 20, epsilon)
+    
+    flags = cv2.KMEANS_RANDOM_CENTERS
+
+    if len(apple_est) > 1:
+        apple_est = np.array(apple_est)
+        apple_est = np.float32(apple_est)
+        compactness, labels, centers = cv2.kmeans(apple_est, k_apple, None, criteria, attempts, flags)
+        apple_est = np.float64(centers)
+
+    if len(lemon_est) > 1:
+        lemon_est = np.array(lemon_est)
+        lemon_est = np.float32(lemon_est)
+        compactness, labels, centers = cv2.kmeans(lemon_est, k_lemon, None, criteria, attempts, flags)
+        lemon_est = np.float64(centers)
+    
+    if len(person_est) > 1:
+        person_est = np.array(person_est)
+        person_est = np.float32(person_est)
+        compactness, labels, centers = cv2.kmeans(person_est, k_person, None, criteria, attempts, flags)
+        person_est = np.float64(centers)
+    
+
     for i in range(3):
         try:
             target_est['apple_'+str(i)] = {'y':apple_est[i][0], 'x':apple_est[i][1]}
