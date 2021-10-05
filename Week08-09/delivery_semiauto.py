@@ -120,16 +120,6 @@ class OperateModified:
             #self.ekf.add_landmarks(lms) # Don't think we need this to add landmarks if we know them already
             self.ekf.update(lms)
 
-    # save images taken by the camera
-    def save_image(self):
-        f_ = os.path.join(self.folder, f'img_{self.image_id}.png')
-        if self.command['save_image']:
-            image = self.pibot.get_image()
-            image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
-            cv2.imwrite(f_, image)
-            self.image_id += 1
-            self.command['save_image'] = False
-            self.notification = f'{f_} is saved'
 
     # wheel and camera calibration for SLAM
     def init_ekf(self, datadir, ip, markers):
@@ -152,77 +142,22 @@ class OperateModified:
             self.output.write_map(self.ekf)
             self.notification = 'Map is saved'
             self.command['output'] = False
-
-    # paint the GUI            
-    def draw(self, canvas):
-        canvas.blit(self.bg, (0, 0))
-        text_colour = (220, 220, 220)
-        v_pad = 40
-        h_pad = 20
-
-        # paint SLAM outputs
-        ekf_view = self.ekf.draw_slam_state(res=(320, 480+v_pad),
-            not_pause = self.ekf_on)
-        canvas.blit(ekf_view, (2*h_pad+320, v_pad))
-        robot_view = cv2.resize(self.aruco_img, (320, 240))
-        self.draw_pygame_window(canvas, robot_view, 
-                                position=(h_pad, v_pad)
-                                )
-
-        # canvas.blit(self.gui_mask, (0, 0))
-        self.put_caption(canvas, caption='SLAM', position=(2*h_pad+320, v_pad)) # M2
-        self.put_caption(canvas, caption='Detector (M3)',
-                         position=(h_pad, 240+2*v_pad)) # M3
-        self.put_caption(canvas, caption='PiBot Cam', position=(h_pad, v_pad))
-
-        notifiation = TEXT_FONT.render(self.notification,
-                                          False, text_colour)
-        canvas.blit(notifiation, (h_pad+10, 596))
-
-        time_remain = self.count_down - time.time() + self.start_time
-        if time_remain > 0:
-            time_remain = f'Count Down: {time_remain:03.0f}s'
-        elif int(time_remain)%2 == 0:
-            time_remain = "Time Is Up !!!"
-        else:
-            time_remain = ""
-        count_down_surface = TEXT_FONT.render(time_remain, False, (50, 50, 50))
-        canvas.blit(count_down_surface, (2*h_pad+320+5, 530))
-        return canvas
-
-    @staticmethod
-    def draw_pygame_window(canvas, cv2_img, position):
-        cv2_img = np.rot90(cv2_img)
-        view = pygame.surfarray.make_surface(cv2_img)
-        view = pygame.transform.flip(view, True, False)
-        canvas.blit(view, position)
-    
-    @staticmethod
-    def put_caption(canvas, caption, position, text_colour=(200, 200, 200)):
-        caption_surface = TITLE_FONT.render(caption,
-                                          False, text_colour)
-        canvas.blit(caption_surface, (position[0], position[1]-25))
-
-    # keyboard teleoperation        
+            
+        # keyboard teleoperation        
     def update_keyboard(self):
         for event in pygame.event.get():
-            ########### replace with your M1 codes ###########
             # drive forward
             if event.type == pygame.KEYDOWN and event.key == pygame.K_UP:
-                self.command['motion'] = [2, 0]
-                pass # TODO: replace with your code to make the robot drive forward
+                self.command['motion'][0] = min(self.command['motion'][0]+1, 1)
             # drive backward
             elif event.type == pygame.KEYDOWN and event.key == pygame.K_DOWN:
-                self.command['motion'] = [-2, 0]
-                pass # TODO: replace with your code to make the robot drive backward
+                self.command['motion'][0] = max(self.command['motion'][0]-1, -1)
             # turn left
             elif event.type == pygame.KEYDOWN and event.key == pygame.K_LEFT:
-                self.command['motion'] = [0, 2]
-                pass # TODO: replace with your code to make the robot turn left
+                self.command['motion'][1] = min(self.command['motion'][1]+1, 1)
             # drive right
             elif event.type == pygame.KEYDOWN and event.key == pygame.K_RIGHT:
-                self.command['motion'] = [0, -2]
-            ####################################################
+                self.command['motion'][1] = max(self.command['motion'][1]-1, -1)
             # stop
             elif event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE:
                 self.command['motion'] = [0, 0]
@@ -260,6 +195,12 @@ class OperateModified:
                         self.notification = 'SLAM is running'
                     else:
                         self.notification = 'SLAM is paused'
+            # run object detector
+            elif event.type == pygame.KEYDOWN and event.key == pygame.K_p:
+                self.command['inference'] = True
+            # save object detection outputs
+            elif event.type == pygame.KEYDOWN and event.key == pygame.K_n:
+                self.command['save_inference'] = True
             # quit
             elif event.type == pygame.QUIT:
                 self.quit = True
@@ -268,6 +209,7 @@ class OperateModified:
         if self.quit:
             pygame.quit()
             sys.exit()
+
 
 # read in the object poses, note that the object pose array is [y,x]
 def parse_map(fname: str) -> dict:
@@ -402,45 +344,162 @@ def slam_to_point(waypoint, operate):
     turning_vel = 5
     
     ##################################################
+    waypoint = np.array(waypoint)
+    
     goal_theta = np.arctan2((waypoint[1] - robot_pose[1]) , (waypoint[0] - robot_pose[0]))
-    gain = 0.5
+    K_pt = 1
     tolerance = 0.1 # rads
-    control_omega, error_theta = PController(goal_theta, operate.ekf.robot.state[2], gain)
+    control_omega, error_theta = PControllerOmega(goal_theta, operate.ekf.robot.state[2], K_pt)
     
     
     # Enter control loop to align the theta pose
     while abs(error_theta) > tolerance:
-        control_omega, error_theta = PController(goal_theta, operate.ekf.robot.state[2], gain)
+        control_omega, error_theta = PControllerOmega(goal_theta, operate.ekf.robot.state[2], K_pt)
+        control_v = 0
         
         print(f"omega: {control_omega}")
         print(f"error: {error_theta}")
         print(f"robot_state_ekf: {operate.ekf.robot.state}")
     
-        #operate.command['motion'] = [0, math.ceil(control_omega)]
-        operate.command['motion'] = [0, int(control_omega / float(abs(control_omega)))]
+        operate.command['motion'] = createMotionCommand(control_v, control_omega)
+        #operate.command['motion'] = [0, int(control_omega / float(abs(control_omega)))]
         
         print(f"cmd: {operate.command['motion']}")
 
         #operate.update_keyboard()
         operate.take_pic()
         drive_meas = operate.control()
+        
         operate.update_slam(drive_meas)
-        #operate.record_data()
-        #operate.save_image()
-        #operate.detect_target()
-        # visualise
-        #operate.draw(canvas)
-        #pygame.display.update()
+        
+    # Enter control loop to drive straight to correct x,y coordinate, maintaining the same theta.
+    stop_criteria_met = False
+    
+    K_pw = 2
+    K_pv = 1
+    threshold = 0.1
+    
+    #print(f"waypoint: {}")
+    #print(f"robot state: {operate.ekf.robot.state}")
+    
+    error_dist = get_distance_robot_to_goal(waypoint, operate.ekf.robot.state)
+    goal_theta = get_angle_robot_to_goal(waypoint, operate.ekf.robot.state)
+    while not stop_criteria_met:
+        if error_dist > threshold:
+            control_v, _ = PControllerV(waypoint, operate.ekf.robot.state, K_pv)
+            control_omega, _ = PControllerOmegaDynamic(waypoint, operate.ekf.robot.state, K_pw)
+            
+            print(f"omega: {control_omega}")
+            print(f"v: {control_v}")
+            print(f"robot_state_ekf: {operate.ekf.robot.state}")
+            
+            #operate.command['motion'] = [int(control_v / float(abs(control_v))), int(control_omega / float(abs(control_omega)))]
+            operate.command['motion'] = createMotionCommand(control_v, control_omega)
+       
+            '''
+            Only run this if we want to go to a desired theta upon x,y arrival at waypoint 
+            else:
+            v_k = 0
+            w_k = 
+            '''
+            operate.take_pic()
+            drive_meas = operate.control()
+            operate.update_slam(drive_meas)
+        
+        else:
+            operate.command['motion'] = [0,0]
+            operate.control()
+            stop_criteria_met = True
+        # Now drive using thse controls
+        
+        
+        # Finally update the errors
+        error_dist = get_distance_robot_to_goal(waypoint, operate.ekf.robot.state)
+        
     
     ##################################################
+def createMotionCommand(control_v, control_omega):
+    if control_v == 0 and control_omega == 0:
+        return [0,0]
+    if control_v == 0 and not control_omega == 0:
+        return [0, int(control_omega / abs(control_omega) * math.ceil(abs(control_omega)))]         
+    if not control_v == 0 and control_omega == 0:
+        return [int(control_v / abs(control_v) * math.ceil(abs(control_v))), 0]
+
+
+            
+    return [int(control_v / abs(control_v) * math.ceil(abs(control_v))), int(control_omega / abs(control_omega) * math.ceil(abs(control_omega)))]
     
     
-    
-def PController(goal_theta, robot_theta, gain):
+def PControllerOmega(goal_theta, robot_theta, gain):
     error_theta = np.arctan2(np.sin(goal_theta - robot_theta), np.cos(goal_theta - robot_theta))
     control_signal = gain * error_theta
     return float(control_signal), float(error_theta)
+    
+def PControllerOmegaDynamic(waypoint, robot_state, gain):
+    error_theta = get_angle_robot_to_goal(waypoint, robot_state)
+    control_signal = gain * error_theta
+    return float(control_signal), float(error_theta)
+    
+def PControllerV(waypoint, robot_state, gain):
+    error_radius = get_distance_robot_to_goal(waypoint, robot_state)
+    control_signal = gain * error_radius
+    return float(control_signal), float(error_radius)
+    
+def get_distance_robot_to_goal(goal=np.zeros(3), robot_state=np.zeros(3)):
+	"""
+	Compute Euclidean distance between the robot and the goal location
+	:param robot_state: 3D vector (x, y, theta) representing the current state of the robot
+	:param goal: 3D Cartesian coordinates of goal location
+	"""
 
+	if goal.shape[0] < 3:
+		goal = np.hstack((goal, np.array([0])))
+
+	x_goal, y_goal,_ = goal
+	x, y,_ = robot_state
+	x_diff = x_goal - x
+	y_diff = y_goal - y
+
+	rho = np.hypot(x_diff, y_diff)
+
+	return rho
+
+def get_angle_robot_to_goal(goal=np.zeros(3), robot_state=np.zeros(3)):
+	"""
+	Compute angle to the goal relative to the heading of the robot.
+	Angle is restricted to the [-pi, pi] interval
+	:param robot_state: 3D vector (x, y, theta) representing the current state of the robot
+	:param goal: 3D Cartesian coordinates of goal location
+	"""
+
+	if goal.shape[0] < 3:
+		goal = np.hstack((goal, np.array([0])))
+
+	x_goal, y_goal,_ = goal
+	x, y, theta = robot_state
+	x_diff = x_goal - x
+	y_diff = y_goal - y
+
+	alpha = clamp_angle(np.arctan2(y_diff, x_diff) - theta)
+
+	return alpha
+    
+def clamp_angle(rad_angle=0, min_value=-np.pi, max_value=np.pi):
+	"""
+	Restrict angle to the range [min, max]
+	:param rad_angle: angle in radians
+	:param min_value: min angle value
+	:param max_value: max angle value
+	"""
+
+	if min_value > 0:
+		min_value *= -1
+
+	angle = (rad_angle + max_value) % (2 * np.pi) + min_value
+
+	return angle
+    
 # convert pixel coordinates to actual coordinates
 def pix_to_world(u,v):
     x = (u - u0) * 3 / width
@@ -597,4 +656,6 @@ if __name__ == "__main__":
         operate.pibot.set_velocity([0, 0])
         uInput = input("Add a new waypoint? [Y/N]")
         if uInput == 'N':
+            operate.command['output'] = True
+            operate.record_data() # Save a copy of the SLAM map to lab_output/slam.txt
             break

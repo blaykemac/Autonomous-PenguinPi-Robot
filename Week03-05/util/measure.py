@@ -1,7 +1,7 @@
 import numpy as np
 
-MARKER_COV_SCALE = 10
-MOTOR_COV_SCALE = 0.05
+MARKER_COV_SCALE = 1
+MOTOR_COV_SCALE = 1
 
 
 class Marker:

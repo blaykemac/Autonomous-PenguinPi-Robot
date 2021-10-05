@@ -107,6 +107,8 @@ class EKF:
         
         self.set_state_vector(pred_state)
         '''
+        print(f"markers: {self.markers}")
+        print(f"taglist: {self.taglist}")
         
     # the update step of EKF
     def update(self, measurements):
@@ -147,13 +149,14 @@ class EKF:
         F[0:3,0:3] = self.robot.derivative_drive(raw_drive_meas)
         return F
     
-    def predict_covariance(self, raw_drive_meas, pert = 0.001):
+    def predict_covariance(self, raw_drive_meas, pert = 0.01):
         n = self.number_landmarks()*2 + 3
         Q = np.zeros((n,n))
         theta_cov = 0.002
         theta_matrix = np.zeros((3,3))
         theta_matrix[2, 2] = theta_cov
         linear_velocity, angular_velocity = self.robot.convert_wheel_speeds(raw_drive_meas.left_speed, raw_drive_meas.right_speed)
+        '''
         epsilon = 0.0001
         pert_theta = 1
         if linear_velocity < epsilon and angular_velocity < epsilon:
@@ -161,7 +164,10 @@ class EKF:
             pert_theta = 0.0
         
         Q[0:3,0:3] = self.robot.covariance_drive(raw_drive_meas)+ pert*np.eye(3)  + pert_theta*theta_matrix
+        '''
         #Q[0:3,0:3] = self.robot.covariance_drive(raw_drive_meas)+ pert*np.eye(3) + theta_matrix
+        Q[0:3,0:3] = self.robot.covariance_drive(raw_drive_meas)+ pert*np.eye(3)
+        
         return Q
 
     def add_landmarks(self, measurements):
