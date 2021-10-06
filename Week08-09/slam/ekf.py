@@ -3,6 +3,7 @@ from mapping_utils import MappingUtils
 import cv2
 import math
 import pygame
+import copy
 
 class EKF:
     # Implementation of an EKF for SLAM
@@ -130,12 +131,34 @@ class EKF:
         S = C @ self.P @ C.T + R
         K = self.P @ C.T @ np.linalg.inv(S)
         y = z - z_hat
-        x_hat = x + K @ y
+        Ky = K @ y
+        x_hat = x + Ky
+        #x_hat = np.add(x, Ky)
+        '''
+        x_hat_reborn = []
+        for i in range(x.shape[0]):
+            x_hat_reborn.append(x[i] + Ky[i])
+            '''
+        
+        print(f"x_hat immediate: {x_hat[0:3]}")
+        #print(f"x_hat_rebornimmediate: {x_hat_reborn[0:3]}")
+        
+        print(f"x[0] + K @ y[0]: {x[0] + Ky[0]}")
+        print(f"x_hat[0:3]: {x_hat[0:3]}")
+        
         self.P = (np.eye(x.shape[0]) - K @ C) @ self.P
         # self.P[3:, 3:] = np.zeros(2*n, 2*n)
-        new_x = x
+        new_x = x #copy.deepcopy(x)
         new_x[0:3] = x_hat[0:3]
         self.set_state_vector(new_x)
+        
+        print(f"new_x[0:3]: {new_x[0:3]}")
+        #print(f"K: {K}")
+        #print(f"y = z - zhat: {y}")
+        #print(f"K @ y : {Ky}")
+        #print(f"x_hat: {x_hat}")
+        #print(f"x + K @ y: {x + Ky}")
+        
 
 
     def state_transition(self, raw_drive_meas):

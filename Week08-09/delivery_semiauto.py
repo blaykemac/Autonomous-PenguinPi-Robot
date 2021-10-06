@@ -495,7 +495,9 @@ def slam_to_point(waypoint, operate, canvas):
         
         else:
             operate.command['motion'] = [0,0]
-            operate.control()
+            operate.take_pic()
+            drive_meas = operate.control()
+            operate.update_slam(drive_meas)
             operate.draw(canvas)
             pygame.display.update()
             stop_criteria_met = True
@@ -613,6 +615,7 @@ if __name__ == "__main__":
     parser.add_argument("--play_data", action='store_true')
     parser.add_argument("--ckpt", default='network/scripts/model/model.best.pth')
     parser.add_argument("--gui", action='store_true')
+    parser.add_argument("--wp", action='store_true')
     args, _ = parser.parse_known_args()
 
     #ppi = PenguinPi(args.ip,args.port)
@@ -696,6 +699,8 @@ if __name__ == "__main__":
                          pygame.image.load('pics/8bit/pibot5.png')]
         pygame.display.update()
 
+    waypoint_counter = 0
+
     # semi-automatic approach for fruit delivery
     while True:
         # enter the waypoints
@@ -706,11 +711,22 @@ if __name__ == "__main__":
         apple_gt, lemon_gt, person_gt, aruco_gt = parse_map(args.map)
         #print(f"apple_gt: {apple_gt}")
         
+        waypoints = [[1, 0.2], [0.2, 1]]
+        
         if args.gui:
         # Enter main pygame loop
             choosing_waypoint = True
             waypoint_gui_offset = np.array([0, -640])
             
+            '''
+            # DELETE LATER
+            choosing_waypoint = not args.wp
+            waypoint = waypoints[waypoint_counter]
+            waypoint_counter += 1
+            forced_waypoints = args.wp
+            '''
+            
+
             while choosing_waypoint:
             
                 # Check for any mouse presses
@@ -722,6 +738,7 @@ if __name__ == "__main__":
                         print(f"mouse pos, (u,v): {pos}")
                         print(f"mouse pos, (x,y): {pix_to_world(pos[0], pos[1])}")
                         choosing_waypoint = False
+                        waypoint = [x,y]
                 
                 #draw each individual apple
                 for apple in apple_gt:
@@ -764,9 +781,11 @@ if __name__ == "__main__":
             except ValueError:
                 print("Please enter a number.")
                 continue
+                
+            waypoint = [x,y]
         
         # robot drives to the waypoint
-        waypoint = [x,y]
+        #waypoint = [x,y]
         
         #while not_at_waypoint:
             # check and update slam
@@ -777,9 +796,14 @@ if __name__ == "__main__":
         print("Finished driving to waypoint: {}; New robot pose: {}".format(waypoint,robot_pose))
 
         # exit
+        
+        '''
         operate.pibot.set_velocity([0, 0])
-        uInput = input("Add a new waypoint? [Y/N]")
-        if uInput == 'N':
-            operate.command['output'] = True
-            operate.record_data() # Save a copy of the SLAM map to lab_output/slam.txt
-            break
+        
+        if not args.wp:
+            uInput = input("Add a new waypoint? [Y/N]")
+            if uInput == 'N':
+                operate.command['output'] = True
+                operate.record_data() # Save a copy of the SLAM map to lab_output/slam.txt
+                break
+                '''
