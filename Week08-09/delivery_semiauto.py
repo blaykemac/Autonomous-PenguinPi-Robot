@@ -27,6 +27,11 @@ import slam.aruco_detector as aruco
 
 import math
 
+# import CV components
+sys.path.insert(0,"{}/network/".format(os.getcwd()))
+sys.path.insert(0,"{}/network/scripts".format(os.getcwd()))
+from network.scripts.detector import Detector
+
 RED = (255, 0, 0) # apple
 YELLOW = (255, 255, 0) #lemon
 WHITE = (255,  255, 255) #background
@@ -80,6 +85,14 @@ class OperateModified:
         self.img = np.zeros([240,320,3], dtype=np.uint8)
         self.aruco_img = np.zeros([240,320,3], dtype=np.uint8)
         self.bg = pygame.image.load('pics/gui_mask.jpg')
+        
+        self.detector_output = np.zeros([240,320], dtype=np.uint8)
+        if args.ckpt == "":
+            self.detector = None
+            self.network_vis = cv2.imread('pics/8bit/detector_splash.png')
+        else:
+            self.detector = Detector(args.ckpt, use_gpu=False)
+            self.network_vis = np.ones((240, 320,3))* 100
 
     # wheel control
     def control(self):       
@@ -209,6 +222,65 @@ class OperateModified:
         if self.quit:
             pygame.quit()
             sys.exit()
+            
+    # paint the GUI            
+    def draw(self, canvas):
+        canvas.blit(self.bg, (0, 0))
+        text_colour = (220, 220, 220)
+        v_pad = 40
+        h_pad = 20
+        #v_pad = 640
+        #h_pad = 660
+
+        # paint SLAM outputs
+        ekf_view = self.ekf.draw_slam_state(res=(320, 480+v_pad),
+            not_pause = self.ekf_on)
+        canvas.blit(ekf_view, (2*h_pad+320, v_pad))
+        robot_view = cv2.resize(self.aruco_img, (320, 240))
+        self.draw_pygame_window(canvas, robot_view, 
+                                position=(h_pad, v_pad)
+                                )
+
+        # for target detector (M3)
+        detector_view = cv2.resize(self.network_vis,
+                                   (320, 240), cv2.INTER_NEAREST)
+        self.draw_pygame_window(canvas, detector_view, 
+                                position=(h_pad, 240+2*v_pad)
+                                )
+
+        # canvas.blit(self.gui_mask, (0, 0))
+        self.put_caption(canvas, caption='SLAM', position=(2*h_pad+320, v_pad))
+        self.put_caption(canvas, caption='Detector',
+                         position=(h_pad, 240+2*v_pad))
+        self.put_caption(canvas, caption='PiBot Cam', position=(h_pad, v_pad))
+
+        notifiation = TEXT_FONT.render(self.notification,
+                                          False, text_colour)
+        canvas.blit(notifiation, (h_pad+10, 596))
+
+        time_remain = self.count_down - time.time() + self.start_time
+        if time_remain > 0:
+            time_remain = f'Count Down: {time_remain:03.0f}s'
+        elif int(time_remain)%2 == 0:
+            time_remain = "Time Is Up !!!"
+        else:
+            time_remain = ""
+        count_down_surface = TEXT_FONT.render(time_remain, False, (50, 50, 50))
+        canvas.blit(count_down_surface, (2*h_pad+320+5, 530))
+        return canvas
+
+    @staticmethod
+    def draw_pygame_window(canvas, cv2_img, position):
+        cv2_img = np.rot90(cv2_img)
+        view = pygame.surfarray.make_surface(cv2_img)
+        view = pygame.transform.flip(view, True, False)
+        canvas.blit(view, position)
+    
+    @staticmethod
+    def put_caption(canvas, caption, position, text_colour=(200, 200, 200)):
+        caption_surface = TITLE_FONT.render(caption,
+                                          False, text_colour)
+        canvas.blit(caption_surface, (position[0], position[1]-25))
 
 
 # read in the object poses, note that the object pose array is [y,x]
@@ -330,7 +402,7 @@ def drive_to_point(waypoint, robot_pose):
     ####################################################
     return robot_pose
 
-def slam_to_point(waypoint, operate):
+def slam_to_point(waypoint, operate, canvas):
     robot_pose = operate.ekf.robot.state
     # imports camera / wheel calibration parameters 
     fileS = "calibration/param/scale.txt"
@@ -351,6 +423,9 @@ def slam_to_point(waypoint, operate):
     tolerance = 0.1 # rads
     control_omega, error_theta = PControllerOmega(goal_theta, operate.ekf.robot.state[2], K_pt)
     
+    # DELETE LATER
+    #print(f"clipped: {clamp_angle(35.09)}")
+    
     
     # Enter control loop to align the theta pose
     while abs(error_theta) > tolerance:
@@ -360,6 +435,7 @@ def slam_to_point(waypoint, operate):
         print(f"omega: {control_omega}")
         print(f"error: {error_theta}")
         print(f"robot_state_ekf: {operate.ekf.robot.state}")
+        print(f"clamped theta: {clamp_angle(operate.ekf.robot.state[2])}")
     
         operate.command['motion'] = createMotionCommand(control_v, control_omega)
         #operate.command['motion'] = [0, int(control_omega / float(abs(control_omega)))]
@@ -369,8 +445,12 @@ def slam_to_point(waypoint, operate):
         #operate.update_keyboard()
         operate.take_pic()
         drive_meas = operate.control()
+        print(f"drive meas: {drive_meas}")
         
         operate.update_slam(drive_meas)
+        
+        operate.draw(canvas)
+        pygame.display.update()
         
     # Enter control loop to drive straight to correct x,y coordinate, maintaining the same theta.
     stop_criteria_met = False
@@ -392,6 +472,7 @@ def slam_to_point(waypoint, operate):
             print(f"omega: {control_omega}")
             print(f"v: {control_v}")
             print(f"robot_state_ekf: {operate.ekf.robot.state}")
+            print(f"clamped theta: {clamp_angle(operate.ekf.robot.state[2])}")
             
             #operate.command['motion'] = [int(control_v / float(abs(control_v))), int(control_omega / float(abs(control_omega)))]
             operate.command['motion'] = createMotionCommand(control_v, control_omega)
@@ -404,11 +485,19 @@ def slam_to_point(waypoint, operate):
             '''
             operate.take_pic()
             drive_meas = operate.control()
+            
+            print(f"drive meas: {drive_meas}")
+            
             operate.update_slam(drive_meas)
+            
+            operate.draw(canvas)
+            pygame.display.update()
         
         else:
             operate.command['motion'] = [0,0]
             operate.control()
+            operate.draw(canvas)
+            pygame.display.update()
             stop_criteria_met = True
         # Now drive using thse controls
         
@@ -501,15 +590,17 @@ def clamp_angle(rad_angle=0, min_value=-np.pi, max_value=np.pi):
 	return angle
     
 # convert pixel coordinates to actual coordinates
-def pix_to_world(u,v):
+def pix_to_world(u,v, offset = np.array([0, 640])):
     x = (u - u0) * 3 / width
     y  = (v0 - v) * 3 / width
-    return x,y
+    #mod_u, mod_v = tuple(np.array([u, v]) + offset)
+    return x, y
     
-def world_to_pix(x,y):
+def world_to_pix(x,y, offset = np.array([0, 640])):
     u = x * width / 3 + u0
     v = v0 - y * width / 3 
-    return u,v
+    #mod_u, mod_v = tuple(np.array([u, v]) + offset)
+    return u, v
 
 # main loop
 if __name__ == "__main__":
@@ -529,7 +620,7 @@ if __name__ == "__main__":
     # read in the map
     apple_gt, lemon_gt, person_gt, aruco_gt = parse_map(args.map)
     print("Map: apple = {}, lemon = {}, person = {}".format(apple_gt, lemon_gt, person_gt))
-    print(aruco_gt)
+    #print(aruco_gt)
 
 
     # find apple(s) and lemon(s) that need to be moved
@@ -547,11 +638,11 @@ if __name__ == "__main__":
     for marker in true_markers:
         marker = np.array([marker[1], marker[0]])
         marker_formatted = np.array([marker]).T
-        print(f"marker: {marker}")
-        print(f"marker format: {marker_formatted}")
+        #print(f"marker: {marker}")
+        #print(f"marker format: {marker_formatted}")
         true_markers_formatted = np.concatenate((true_markers_formatted, marker_formatted), axis=1)
     
-    print(f"markers: {true_markers_formatted}")
+    #print(f"markers: {true_markers_formatted}")
     
     operate = OperateModified(args, true_markers_formatted)
     
@@ -562,18 +653,48 @@ if __name__ == "__main__":
     
     # initialise gui
     if args.gui:
-        width, height = 640, 640
-        canvas = pygame.display.set_mode((width, height))
+        width, height = 660, 660
+        slam_width = 700
+        width_mod, height_mod = (width  + slam_width, height)
+        canvas = pygame.display.set_mode((width_mod, height_mod))
         pygame.display.set_caption('Semiautomatic Waypoint Selection')
         canvas.fill(WHITE)
         pygame.display.update()
-        u0 = width / 2
+        u0 = width / 2 + slam_width
         v0 = height / 2
         
         RADIUS = 15
         pygame.init()
         font = pygame.font.SysFont("Arial", 15)
-    
+        TITLE_FONT = pygame.font.Font('pics/8-BitMadness.ttf', 35)
+        TEXT_FONT = pygame.font.Font('pics/8-BitMadness.ttf', 40)
+        
+        pibot_animate = [pygame.image.load('pics/8bit/pibot1.png'),
+                     pygame.image.load('pics/8bit/pibot2.png'),
+                     pygame.image.load('pics/8bit/pibot3.png'),
+                    pygame.image.load('pics/8bit/pibot4.png'),
+                     pygame.image.load('pics/8bit/pibot5.png')]
+        pygame.display.update()
+        
+    else:
+        width, height = 700, 660
+        
+        pygame.font.init() 
+        TITLE_FONT = pygame.font.Font('pics/8-BitMadness.ttf', 35)
+        TEXT_FONT = pygame.font.Font('pics/8-BitMadness.ttf', 40)
+        
+        width, height = 700, 660
+        canvas = pygame.display.set_mode((width, height))
+        pygame.display.set_caption('ECE4078 2021 Lab')
+        pygame.display.set_icon(pygame.image.load('pics/8bit/pibot5.png'))
+        canvas.fill((0, 0, 0))
+        splash = pygame.image.load('pics/loading.png')
+        pibot_animate = [pygame.image.load('pics/8bit/pibot1.png'),
+                         pygame.image.load('pics/8bit/pibot2.png'),
+                         pygame.image.load('pics/8bit/pibot3.png'),
+                        pygame.image.load('pics/8bit/pibot4.png'),
+                         pygame.image.load('pics/8bit/pibot5.png')]
+        pygame.display.update()
 
     # semi-automatic approach for fruit delivery
     while True:
@@ -588,12 +709,15 @@ if __name__ == "__main__":
         if args.gui:
         # Enter main pygame loop
             choosing_waypoint = True
+            waypoint_gui_offset = np.array([0, -640])
+            
             while choosing_waypoint:
             
                 # Check for any mouse presses
                 for event in pygame.event.get():
                     if event.type == pygame.MOUSEBUTTONDOWN:
                         pos = pygame.mouse.get_pos()
+                        #offset_pos = np.array(pos) + waypoint_gui_offset
                         x,y = pix_to_world(pos[0], pos[1])
                         print(f"mouse pos, (u,v): {pos}")
                         print(f"mouse pos, (x,y): {pix_to_world(pos[0], pos[1])}")
@@ -648,7 +772,7 @@ if __name__ == "__main__":
             # check and update slam
             # are we at waypoint?
             # if not, we need to run the set_velocity with our P controller
-        slam_to_point(waypoint,operate)
+        slam_to_point(waypoint,operate, canvas)
             #robot_pose = drive_to_point(waypoint,robot_pose)
         print("Finished driving to waypoint: {}; New robot pose: {}".format(waypoint,robot_pose))
 
