@@ -1,0 +1,370 @@
+Net Architecture:
+Resnet18Skip(
+  (res18_backbone): Sequential(
+    (0): Conv2d(3, 64, kernel_size=(7, 7), stride=(2, 2), padding=(3, 3), bias=False)
+    (1): BatchNorm2d(64, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+    (2): ReLU(inplace=True)
+    (3): MaxPool2d(kernel_size=3, stride=2, padding=1, dilation=1, ceil_mode=False)
+  )
+  (conv2_x): Sequential(
+    (0): Sequential(
+      (0): BasicBlock(
+        (conv1): Conv2d(64, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+        (bn1): BatchNorm2d(64, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+        (relu): ReLU(inplace=True)
+        (conv2): Conv2d(64, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+        (bn2): BatchNorm2d(64, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+      )
+      (1): BasicBlock(
+        (conv1): Conv2d(64, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+        (bn1): BatchNorm2d(64, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+        (relu): ReLU(inplace=True)
+        (conv2): Conv2d(64, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+        (bn2): BatchNorm2d(64, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+      )
+    )
+  )
+  (conv3_x): Sequential(
+    (0): Sequential(
+      (0): BasicBlock(
+        (conv1): Conv2d(64, 128, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1), bias=False)
+        (bn1): BatchNorm2d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+        (relu): ReLU(inplace=True)
+        (conv2): Conv2d(128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+        (bn2): BatchNorm2d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+        (downsample): Sequential(
+          (0): Conv2d(64, 128, kernel_size=(1, 1), stride=(2, 2), bias=False)
+          (1): BatchNorm2d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+        )
+      )
+      (1): BasicBlock(
+        (conv1): Conv2d(128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+        (bn1): BatchNorm2d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+        (relu): ReLU(inplace=True)
+        (conv2): Conv2d(128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+        (bn2): BatchNorm2d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+      )
+    )
+  )
+  (conv4_x): Sequential(
+    (0): Sequential(
+      (0): BasicBlock(
+        (conv1): Conv2d(128, 256, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1), bias=False)
+        (bn1): BatchNorm2d(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+        (relu): ReLU(inplace=True)
+        (conv2): Conv2d(256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+        (bn2): BatchNorm2d(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+        (downsample): Sequential(
+          (0): Conv2d(128, 256, kernel_size=(1, 1), stride=(2, 2), bias=False)
+          (1): BatchNorm2d(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+        )
+      )
+      (1): BasicBlock(
+        (conv1): Conv2d(256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+        (bn1): BatchNorm2d(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+        (relu): ReLU(inplace=True)
+        (conv2): Conv2d(256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+        (bn2): BatchNorm2d(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+      )
+    )
+  )
+  (conv5_x): Sequential(
+    (0): Sequential(
+      (0): BasicBlock(
+        (conv1): Conv2d(256, 512, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1), bias=False)
+        (bn1): BatchNorm2d(512, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+        (relu): ReLU(inplace=True)
+        (conv2): Conv2d(512, 512, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+        (bn2): BatchNorm2d(512, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+        (downsample): Sequential(
+          (0): Conv2d(256, 512, kernel_size=(1, 1), stride=(2, 2), bias=False)
+          (1): BatchNorm2d(512, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+        )
+      )
+      (1): BasicBlock(
+        (conv1): Conv2d(512, 512, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+        (bn1): BatchNorm2d(512, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+        (relu): ReLU(inplace=True)
+        (conv2): Conv2d(512, 512, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+        (bn2): BatchNorm2d(512, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+      )
+    )
+  )
+  (top_conv): Sequential(
+    (0): Conv2d(512, 128, kernel_size=(1, 1), stride=(1, 1))
+    (1): ReLU()
+  )
+  (lateral_conv1): Sequential(
+    (0): Conv2d(256, 128, kernel_size=(1, 1), stride=(1, 1))
+    (1): ReLU()
+  )
+  (lateral_conv2): Sequential(
+    (0): Conv2d(128, 128, kernel_size=(1, 1), stride=(1, 1))
+    (1): ReLU()
+  )
+  (lateral_conv3): Sequential(
+    (0): Conv2d(64, 128, kernel_size=(1, 1), stride=(1, 1))
+    (1): ReLU()
+  )
+  (segmentation_conv): Sequential(
+    (0): Conv2d(128, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (1): ReLU()
+    (2): Conv2d(64, 4, kernel_size=(1, 1), stride=(1, 1))
+  )
+  (criterion): CrossEntropyLoss()
+)
+Loss Function: CrossEntropyLoss
+
+===========================================================
+==================== Hyper-parameters =====================
+n_classes: 3
+lr: 0.001
+epochs: 40
+batch_size: 64
+weight_decay: 0.0001
+scheduler_step: 5
+scheduler_gamma: 0.5
+model_dir: /content/gdrive/MyDrive/training/ECE4078_2021_Lab_M3_Colab/model/
+load_best: 0
+log_freq: 20
+dataset_dir: /content/gdrive/MyDrive/training/ECE4078_2021_Lab_M3_Colab/dataset/
+===========================================================
+============= Epoch 0 | 2021-09-04 09:17:28 ===============
+=> Current Lr: 0.001
+[0/37]: 1.6906
+[20/37]: 0.0718
+=> Training Loss: 0.1551, Evaluation Loss 0.0790
+
+============= Epoch 1 | 2021-09-04 09:18:24 ===============
+=> Current Lr: 0.001
+[0/37]: 0.0839
+[20/37]: 0.0666
+=> Training Loss: 0.0737, Evaluation Loss 0.0651
+
+============= Epoch 2 | 2021-09-04 09:19:19 ===============
+=> Current Lr: 0.001
+[0/37]: 0.0540
+[20/37]: 0.0686
+=> Training Loss: 0.0627, Evaluation Loss 0.0619
+
+============= Epoch 3 | 2021-09-04 09:20:14 ===============
+=> Current Lr: 0.001
+[0/37]: 0.0441
+[20/37]: 0.0523
+=> Training Loss: 0.0531, Evaluation Loss 0.0515
+
+============= Epoch 4 | 2021-09-04 09:21:09 ===============
+=> Current Lr: 0.001
+[0/37]: 0.0452
+[20/37]: 0.0438
+=> Training Loss: 0.0466, Evaluation Loss 0.0745
+
+============= Epoch 5 | 2021-09-04 09:22:03 ===============
+=> Current Lr: 0.0005
+[0/37]: 0.0411
+[20/37]: 0.0411
+=> Training Loss: 0.0400, Evaluation Loss 0.0410
+
+============= Epoch 6 | 2021-09-04 09:22:57 ===============
+=> Current Lr: 0.0005
+[0/37]: 0.0457
+[20/37]: 0.0416
+=> Training Loss: 0.0376, Evaluation Loss 0.0380
+
+============= Epoch 7 | 2021-09-04 09:23:52 ===============
+=> Current Lr: 0.0005
+[0/37]: 0.0337
+[20/37]: 0.0389
+=> Training Loss: 0.0355, Evaluation Loss 0.0432
+
+============= Epoch 8 | 2021-09-04 09:24:46 ===============
+=> Current Lr: 0.0005
+[0/37]: 0.0282
+[20/37]: 0.0324
+=> Training Loss: 0.0331, Evaluation Loss 0.0330
+
+============= Epoch 9 | 2021-09-04 09:25:41 ===============
+=> Current Lr: 0.0005
+[0/37]: 0.0275
+[20/37]: 0.0386
+=> Training Loss: 0.0311, Evaluation Loss 0.0352
+
+============= Epoch 10 | 2021-09-04 09:26:36 ==============
+=> Current Lr: 0.00025
+[0/37]: 0.0247
+[20/37]: 0.0264
+=> Training Loss: 0.0291, Evaluation Loss 0.0293
+
+============= Epoch 11 | 2021-09-04 09:27:30 ==============
+=> Current Lr: 0.00025
+[0/37]: 0.0255
+[20/37]: 0.0290
+=> Training Loss: 0.0254, Evaluation Loss 0.0254
+
+============= Epoch 12 | 2021-09-04 09:28:25 ==============
+=> Current Lr: 0.00025
+[0/37]: 0.0169
+[20/37]: 0.0262
+=> Training Loss: 0.0260, Evaluation Loss 0.0254
+
+============= Epoch 13 | 2021-09-04 09:29:20 ==============
+=> Current Lr: 0.00025
+[0/37]: 0.0269
+[20/37]: 0.0320
+=> Training Loss: 0.0236, Evaluation Loss 0.0263
+
+============= Epoch 14 | 2021-09-04 09:30:16 ==============
+=> Current Lr: 0.00025
+[0/37]: 0.0243
+[20/37]: 0.0188
+=> Training Loss: 0.0226, Evaluation Loss 0.0246
+
+============= Epoch 15 | 2021-09-04 09:31:11 ==============
+=> Current Lr: 0.000125
+[0/37]: 0.0182
+[20/37]: 0.0191
+=> Training Loss: 0.0215, Evaluation Loss 0.0230
+
+============= Epoch 16 | 2021-09-04 09:32:07 ==============
+=> Current Lr: 0.000125
+[0/37]: 0.0262
+[20/37]: 0.0240
+=> Training Loss: 0.0198, Evaluation Loss 0.0222
+
+============= Epoch 17 | 2021-09-04 09:33:02 ==============
+=> Current Lr: 0.000125
+[0/37]: 0.0178
+[20/37]: 0.0189
+=> Training Loss: 0.0197, Evaluation Loss 0.0229
+
+============= Epoch 18 | 2021-09-04 09:33:57 ==============
+=> Current Lr: 0.000125
+[0/37]: 0.0157
+[20/37]: 0.0160
+=> Training Loss: 0.0189, Evaluation Loss 0.0213
+
+============= Epoch 19 | 2021-09-04 09:34:51 ==============
+=> Current Lr: 0.000125
+[0/37]: 0.0203
+[20/37]: 0.0253
+=> Training Loss: 0.0208, Evaluation Loss 0.0248
+
+============= Epoch 20 | 2021-09-04 09:35:46 ==============
+=> Current Lr: 6.25e-05
+[0/37]: 0.0211
+[20/37]: 0.0178
+=> Training Loss: 0.0178, Evaluation Loss 0.0207
+
+============= Epoch 21 | 2021-09-04 09:36:41 ==============
+=> Current Lr: 6.25e-05
+[0/37]: 0.0187
+[20/37]: 0.0223
+=> Training Loss: 0.0175, Evaluation Loss 0.0197
+
+============= Epoch 22 | 2021-09-04 09:37:36 ==============
+=> Current Lr: 6.25e-05
+[0/37]: 0.0196
+[20/37]: 0.0140
+=> Training Loss: 0.0163, Evaluation Loss 0.0186
+
+============= Epoch 23 | 2021-09-04 09:38:31 ==============
+=> Current Lr: 6.25e-05
+[0/37]: 0.0136
+[20/37]: 0.0105
+=> Training Loss: 0.0158, Evaluation Loss 0.0199
+
+============= Epoch 24 | 2021-09-04 09:39:25 ==============
+=> Current Lr: 6.25e-05
+[0/37]: 0.0249
+[20/37]: 0.0154
+=> Training Loss: 0.0158, Evaluation Loss 0.0200
+
+============= Epoch 25 | 2021-09-04 09:40:20 ==============
+=> Current Lr: 3.125e-05
+[0/37]: 0.0208
+[20/37]: 0.0119
+=> Training Loss: 0.0155, Evaluation Loss 0.0182
+
+============= Epoch 26 | 2021-09-04 09:41:15 ==============
+=> Current Lr: 3.125e-05
+[0/37]: 0.0148
+[20/37]: 0.0145
+=> Training Loss: 0.0150, Evaluation Loss 0.0169
+
+============= Epoch 27 | 2021-09-04 09:42:09 ==============
+=> Current Lr: 3.125e-05
+[0/37]: 0.0170
+[20/37]: 0.0234
+=> Training Loss: 0.0152, Evaluation Loss 0.0190
+
+============= Epoch 28 | 2021-09-04 09:43:04 ==============
+=> Current Lr: 3.125e-05
+[0/37]: 0.0147
+[20/37]: 0.0155
+=> Training Loss: 0.0153, Evaluation Loss 0.0181
+
+============= Epoch 29 | 2021-09-04 09:43:58 ==============
+=> Current Lr: 3.125e-05
+[0/37]: 0.0160
+[20/37]: 0.0134
+=> Training Loss: 0.0150, Evaluation Loss 0.0178
+
+============= Epoch 30 | 2021-09-04 09:44:52 ==============
+=> Current Lr: 1.5625e-05
+[0/37]: 0.0248
+[20/37]: 0.0112
+=> Training Loss: 0.0142, Evaluation Loss 0.0180
+
+============= Epoch 31 | 2021-09-04 09:45:46 ==============
+=> Current Lr: 1.5625e-05
+[0/37]: 0.0147
+[20/37]: 0.0193
+=> Training Loss: 0.0140, Evaluation Loss 0.0181
+
+============= Epoch 32 | 2021-09-04 09:46:41 ==============
+=> Current Lr: 1.5625e-05
+[0/37]: 0.0143
+[20/37]: 0.0130
+=> Training Loss: 0.0140, Evaluation Loss 0.0165
+
+============= Epoch 33 | 2021-09-04 09:47:36 ==============
+=> Current Lr: 1.5625e-05
+[0/37]: 0.0176
+[20/37]: 0.0164
+=> Training Loss: 0.0139, Evaluation Loss 0.0184
+
+============= Epoch 34 | 2021-09-04 09:48:31 ==============
+=> Current Lr: 1.5625e-05
+[0/37]: 0.0175
+[20/37]: 0.0165
+=> Training Loss: 0.0143, Evaluation Loss 0.0203
+
+============= Epoch 35 | 2021-09-04 09:49:25 ==============
+=> Current Lr: 7.8125e-06
+[0/37]: 0.0116
+[20/37]: 0.0134
+=> Training Loss: 0.0140, Evaluation Loss 0.0190
+
+============= Epoch 36 | 2021-09-04 09:50:19 ==============
+=> Current Lr: 7.8125e-06
+[0/37]: 0.0133
+[20/37]: 0.0139
+=> Training Loss: 0.0139, Evaluation Loss 0.0181
+
+============= Epoch 37 | 2021-09-04 09:51:13 ==============
+=> Current Lr: 7.8125e-06
+[0/37]: 0.0160
+[20/37]: 0.0177
+=> Training Loss: 0.0137, Evaluation Loss 0.0171
+
+============= Epoch 38 | 2021-09-04 09:52:08 ==============
+=> Current Lr: 7.8125e-06
+[0/37]: 0.0154
+[20/37]: 0.0154
+=> Training Loss: 0.0138, Evaluation Loss 0.0168
+
+============= Epoch 39 | 2021-09-04 09:53:02 ==============
+=> Current Lr: 7.8125e-06
+[0/37]: 0.0159
+[20/37]: 0.0142
+=> Training Loss: 0.0134, Evaluation Loss 0.0172
