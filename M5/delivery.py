@@ -43,6 +43,9 @@ if __name__ == "__main__":
         # check for any events such as keyboard or mouse presses
         operator.update_input()
         
+        # run full auto waypoint creator
+        operator.automate_waypoint()
+        
         # take image from camera
         operator.take_pic()
         

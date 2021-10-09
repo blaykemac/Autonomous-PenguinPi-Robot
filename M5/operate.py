@@ -461,6 +461,15 @@ class Operate:
                 self.finished_navigating = True
                 self.turning = True
                 
+        def automate_waypoint(self):
+            """ Add code that genrates waypoint automatically
+        
+            """
+            #self.waypoint = np.array([x, y])
+            self.turning = True
+            self.finished_navigating = False
+            pass
+                
 
 """
     def blind_drive(self):

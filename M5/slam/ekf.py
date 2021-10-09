@@ -134,24 +134,32 @@ class EKF:
         F[0:3,0:3] = self.robot.derivative_drive(raw_drive_meas)
         return F
     
-    def predict_covariance(self, raw_drive_meas, pert = 0.005):
+    def predict_covariance(self, raw_drive_meas, pert_xy = 0.0001, pert_theta = 0.0003):
         n = self.number_landmarks()*2 + 3
         Q = np.zeros((n,n))
-        theta_cov = 0.002
+        xy_matrix = np.eye(3)
+        xy_matrix[2,2] = 0
         theta_matrix = np.zeros((3,3))
-        theta_matrix[2, 2] = theta_cov
+        theta_matrix[2,2] = 1
+        epsilon = 0.0001
         linear_velocity, angular_velocity = self.robot.convert_wheel_speeds(raw_drive_meas.left_speed, raw_drive_meas.right_speed)
         
-        epsilon = 0.0001
-        pert_theta = 1
+        # we are completely stationary so don't change covariances
+        
         if linear_velocity < epsilon and angular_velocity < epsilon:
-            pert = 0.0
+            pert_xy = 0.0
             pert_theta = 0.0
+            
+        # then xy covariance should increase as driving straight
+        elif linear_velocity > epsilon:
+            pert_theta = 0
         
-        #Q[0:3,0:3] = self.robot.covariance_drive(raw_drive_meas)+ pert*np.eye(3)  + pert_theta*theta_matrix
-        
-        #Q[0:3,0:3] = self.robot.covariance_drive(raw_drive_meas)+ pert*np.eye(3) + theta_matrix
-        Q[0:3,0:3] = self.robot.covariance_drive(raw_drive_meas)+ pert*np.eye(3)
+        # then theta covariance should increase as turning only
+        elif angular_velocity > epsilon:
+            pert_xy = 0
+            
+
+        Q[0:3,0:3] = self.robot.covariance_drive(raw_drive_meas)+ pert_xy*xy_matrix + pert_theta * theta_matrix
         
         return Q
 
