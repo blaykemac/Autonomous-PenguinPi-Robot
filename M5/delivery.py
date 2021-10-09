@@ -1,4 +1,4 @@
-#!/usr/local/bin/env python
+#!/usr/local/bin python3
 
 # import modules
 import operate
@@ -40,33 +40,40 @@ if __name__ == "__main__":
             pygame.display.update()
             counter += 2
     """
-    # main control loop where we run all necessary functions in class Operate()
-    while True:
-        # check for any events such as keyboard or mouse presses
-        operator.update_input()
+    try:
+        # main control loop where we run all necessary functions in class Operate()
+        while True:
+            # check for any events such as keyboard or mouse presses
+            operator.update_input()
+            
+            # run full auto waypoint creator
+            operator.automate_waypoint()
+            
+            # take image from camera
+            operator.take_pic()
+            
+            # navigate to waypoint
+            operator.navigate_to_waypoint()
+            
+            # generate drive signal from the 
+            drive_meas = operator.control()
+            
+            # run predict and update step of SLAM given the drive signal generated previously
+            operator.update_slam(drive_meas)
+            
+            # save slam map, detected objects and raw camera image
+            operator.record_data()
+            operator.save_image()
+            
+            # perform object segmentation
+            operator.detect_target()
+            
+            # visualise
+            operator.draw()
+            pygame.display.update()
+            
+    except:
+        # stop robot from moving if script crashes or we close program
+        operator.pibot.set_velocity([0, 0])
         
-        # run full auto waypoint creator
-        operator.automate_waypoint()
-        
-        # take image from camera
-        operator.take_pic()
-        
-        # navigate to waypoint
-        operator.navigate_to_waypoint()
-        
-        # generate drive signal from the 
-        drive_meas = operator.control()
-        
-        # run predict and update step of SLAM given the drive signal generated previously
-        operator.update_slam(drive_meas)
-        
-        # save slam map, detected objects and raw camera image
-        operator.record_data()
-        operator.save_image()
-        
-        # perform object segmentation
-        operator.detect_target()
-        
-        # visualise
-        operator.draw()
-        pygame.display.update()
+        pass

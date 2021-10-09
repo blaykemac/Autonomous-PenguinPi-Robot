@@ -430,6 +430,7 @@ class Operate:
                 self.turning = True
                 
         if self.quit:
+            #self.pibot.set_velocity([0, 0])
             pygame.quit()
             sys.exit()
     
