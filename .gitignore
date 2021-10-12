@@ -1,5 +1,1 @@
-M1/network/scripts/model/model*
-M2/network/scripts/model/model*
-M3/network/scripts/model/model*
-M4/network/scripts/model/model*
-M5/network/scripts/model/model*
+*.pth

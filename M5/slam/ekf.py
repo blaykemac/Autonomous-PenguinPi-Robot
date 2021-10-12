@@ -86,7 +86,8 @@ class EKF:
     # Tune your SLAM algorithm here
     # ########################################
 
-    # the prediction step of EKF
+    # the prediction step of EKF, our version
+    """
     def predict(self, raw_drive_meas):
 
         F = self.state_transition(raw_drive_meas)
@@ -94,8 +95,56 @@ class EKF:
         Q = self.predict_covariance(raw_drive_meas)
         self.P = F @ self.P @ F.T + Q  
         self.robot.drive(raw_drive_meas)
+        """
         
-    # the update step of EKF
+    def predict(self, raw_drive_meas):
+        # The prediction step of EKF
+
+        F = self.state_transition(raw_drive_meas)
+        x = self.get_state_vector()
+
+        Q = self.predict_covariance(raw_drive_meas)
+
+        self.robot.drive(raw_drive_meas)
+        x[0:3, :] = self.robot.state
+        self.P = F @ self.P @ F.T + Q
+
+        self.set_state_vector(x)
+        
+    def update(self, measurements):
+        if not measurements:
+            return
+
+        # Construct measurement index list
+        tags = [lm.tag for lm in measurements]
+        idx_list = [self.taglist.index(tag) for tag in tags]
+
+        # Stack measurements and set covariance
+        z = np.concatenate([lm.position.reshape(-1,1) for lm in measurements], axis=0)
+        R = np.zeros((2*len(measurements),2*len(measurements)))
+        for i in range(len(measurements)):
+            R[2*i:2*i+2,2*i:2*i+2] = measurements[i].covariance
+
+        # Compute own measurements
+        z_hat = self.robot.measure(self.markers, idx_list)
+        z_hat = z_hat.reshape((-1,1),order="F")
+        H = self.robot.derivative_measure(self.markers, idx_list)
+
+        x = self.get_state_vector()
+
+        y = z - z_hat
+        S = H @ self.P @ H.T + R
+        K = self.P @ H.T @ np.linalg.inv(S)
+
+        x = x + K @ y
+        self.P = (np.eye(x.shape[0]) - K @ H) @ self.P
+        self.set_state_vector(x)
+        
+        # set minimum value for landmark covariance
+        
+        
+    # the update step of EKF, our version
+    """
     def update(self, measurements):
         if not measurements:
             return
@@ -126,14 +175,33 @@ class EKF:
         new_x = x
         new_x[0:3] = x_hat[0:3]
         self.set_state_vector(new_x)
-      
+      """
 
     def state_transition(self, raw_drive_meas):
         n = self.number_landmarks()*2 + 3
         F = np.eye(n)
         F[0:3,0:3] = self.robot.derivative_drive(raw_drive_meas)
         return F
+        
+    def predict_covariance(self, raw_drive_meas):
+        n = self.number_landmarks()*2 + 3
+        Q = np.zeros((n,n))
+        
+        lv, rv = raw_drive_meas.left_speed, raw_drive_meas.right_speed
+
+        if lv == 0 and rv == 0 :
+            cov = 0
+        elif lv == rv:
+            cov = 1
+        else:
+            cov = 1.5
+        
+        
+        Q[0:3,0:3] = cov*(self.robot.covariance_drive(raw_drive_meas)+ 0.0001*np.eye(3))
+        return Q
     
+    # our version
+    """
     def predict_covariance(self, raw_drive_meas, pert_xy = 0.0001, pert_theta = 0.0003):
         n = self.number_landmarks()*2 + 3
         Q = np.zeros((n,n))
@@ -146,13 +214,16 @@ class EKF:
         
         # we are completely stationary so don't change covariances
         
-        if linear_velocity < epsilon and angular_velocity < epsilon:
+        if abs(linear_velocity) < epsilon and abs(angular_velocity) < epsilon:
             pert_xy = 0.0
             pert_theta = 0.0
+            print(f"cov drive: {self.robot.covariance_drive(raw_drive_meas)}")
+            return Q
             
         # then xy covariance should increase as driving straight
         elif linear_velocity > epsilon:
             pert_theta = 0
+            
         
         # then theta covariance should increase as turning only
         elif angular_velocity > epsilon:
@@ -162,6 +233,7 @@ class EKF:
         Q[0:3,0:3] = self.robot.covariance_drive(raw_drive_meas)+ pert_xy*xy_matrix + pert_theta * theta_matrix
         
         return Q
+    """
 
     def add_landmarks(self, measurements):
         if not measurements:
@@ -181,6 +253,10 @@ class EKF:
             offset[0] = -0.08
             lm_bff = lm.position #+ offset
             lm_inertial = robot_xy + R_theta @ lm_bff
+            
+            # print readings for testing
+            print(f"lm_inertial: {lm_inertial}")
+            print(f"robot_xy: {robot_xy}")
             
             self.taglist.append(int(lm.tag))
             self.markers = np.concatenate((self.markers, lm_inertial), axis=1)

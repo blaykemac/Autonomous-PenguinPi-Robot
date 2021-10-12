@@ -1,12 +1,12 @@
 import numpy as np
 
-MARKER_COV_SCALE = 10
-MOTOR_COV_SCALE = 0.0001
+MARKER_COV_SCALE = 100
+MOTOR_COV_SCALE = 1
 
 
 class Marker:
     # Measurements are of landmarks in 2D and have a position as well as tag id.
-    def __init__(self, position, tag, covariance = (MARKER_COV_SCALE*0.1*np.eye(2))):
+    def __init__(self, position, tag, covariance = (MARKER_COV_SCALE*0.001*np.eye(2))):
         self.position = position
         self.tag = tag
         self.covariance = covariance

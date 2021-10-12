@@ -72,8 +72,12 @@ if __name__ == "__main__":
             operator.draw()
             pygame.display.update()
             
-    except:
+            # print state for debugging
+            print(f"ekf state: {operator.ekf.robot.state}")
+            
+    except Exception as exc:
         # stop robot from moving if script crashes or we close program
         operator.pibot.set_velocity([0, 0])
+        print(exc)
         
         pass

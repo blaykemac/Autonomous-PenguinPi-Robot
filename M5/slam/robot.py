@@ -119,6 +119,45 @@ class Robot:
 
         return DH
     
+    # THEIR PROVIDED SOLUTION FOR COV DRIVE
+    def covariance_drive(self, drive_meas):
+        # Derivative of lin_vel, ang_vel w.r.t. left_speed, right_speed
+        Jac1 = np.array([[self.wheels_scale/2, self.wheels_scale/2],
+                [-self.wheels_scale/self.wheels_width, self.wheels_scale/self.wheels_width]])
+        
+        lin_vel, ang_vel = self.convert_wheel_speeds(drive_meas.left_speed, drive_meas.right_speed)
+        th = self.state[2]
+        dt = drive_meas.dt
+        th2 = th + dt*ang_vel
+
+        # Derivative of x,y,theta w.r.t. lin_vel, ang_vel
+        Jac2 = np.zeros((3,2))
+        if ang_vel == 0:
+            Jac2[0,0] = np.cos(th)*dt
+            Jac2[1,0] = np.sin(th)*dt
+        else:
+            Jac2[0,0] = 1/ang_vel * (np.sin(th2) - np.sin(th))
+            Jac2[0,1] = -lin_vel/(ang_vel**2) * (np.sin(th2) - np.sin(th)) + \
+                            lin_vel / ang_vel * (dt * np.cos(th2))
+
+            Jac2[1,0] = -1/ang_vel * (np.cos(th2) - np.cos(th))
+            Jac2[1,1] = lin_vel/(ang_vel**2) * (np.cos(th2) - np.cos(th)) + \
+                            -lin_vel / ang_vel * (-dt * np.sin(th2))
+            Jac2[2,1] = dt
+
+        # Derivative of x,y,theta w.r.t. left_speed, right_speed
+        Jac = Jac2 @ Jac1
+        
+        
+
+        # Compute covariance
+        cov = np.diag((drive_meas.left_cov, drive_meas.right_cov))
+        cov = Jac @ cov @ Jac.T
+        
+        return cov
+    
+    """ 
+    # OUR OLD COVARIANCE DRIVE, REPLACED WITH THEIR SOLUTION
     def covariance_drive(self, drive_meas):
         # Derivative of lin_vel, ang_vel w.r.t. left_speed, right_speed
         Jac1 = np.array([[self.wheels_scale/2, self.wheels_scale/2],
@@ -151,3 +190,4 @@ class Robot:
         cov = Jac @ cov @ Jac.T
         
         return cov
+"""
