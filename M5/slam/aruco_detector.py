@@ -21,8 +21,6 @@ class aruco_detector:
             img, self.aruco_dict, parameters=self.aruco_params)
         rvecs, tvecs, _ = cv2.aruco.estimatePoseSingleMarkers(
             corners, self.marker_length, self.camera_matrix, self.distortion_params)
-            
-        #print(f"ids: {ids}")
 
         if ids is None:
             return [], img
@@ -37,10 +35,11 @@ class aruco_detector:
                 continue
             else:
                 seen_ids.append(idi)
-
-            #print(f"idi: {idi} ##################################")
             
+            # store list of which lm faces should be used for estimate
             valid_faces = np.zeros( len(ids), dtype = np.bool)
+            
+            # distance horizontally in pixels that is required for lm face to be considered valid
             permissible_width = 15
                         
             for face_index, face in enumerate(corners):
@@ -48,45 +47,45 @@ class aruco_detector:
                     top_left_x = face[0, 0, 0]
                     top_right_x = face[0, 1, 0]
                     
+                    # compute horizontal distance between top corners of landmark, in pixels
                     x_width = abs(top_left_x - top_right_x)
                     
+                    # only valid if we see enough pixels of lm
                     if x_width >= permissible_width:
                         valid_faces[face_index] = True
                     
             valid_faces = np.array([valid_faces]).T
+            
+            # if no faces are valid in view, return early as no measurements to take
             if (valid_faces == False).all():
                 return [], img
 
-                       
-            # our version
+            # filter out the invalid transformations
             lm_tvecs = tvecs[valid_faces].T
-            #print(f"lm_tvecs: {lm_tvecs}")
-            #print(f"tvecs: {tvecs[idi == ids].T}")
-            
-            
             lm_rvecs = rvecs[valid_faces]
             
-            lm_rmats = [cv2.Rodrigues(vec)[0] for vec in lm_rvecs]
+            # compute rotation matrix R from rvec
+            lm_rmats = [cv2.Rodrigues(rvec)[0] for rvec in lm_rvecs]
+            
             # offset marker centre to cube centre
             cube_centre = np.array([0, 0, -0.04])
-            rotated_offsets = np.array([lm_rmat @ cube_centre for lm_rmat in lm_rmats])
             
-            robot_offsets = rotated_offsets + lm_tvecs.T
+            # compute R * cube_centre
+            rotated_centres = np.array([lm_rmat @ cube_centre for lm_rmat in lm_rmats])
+            
+            # compute R*cube_centre + t
+            robot_offsets = rotated_centres + lm_tvecs.T
+            
+            #offset from camera coordinates to account for camera being 8cm in front of robot
             est_centres_cc = np.array([[r[2] + 0.08, -r[0]] for r in robot_offsets])
             
-            #may also need to offset from camera coordinates to account for camera being 10cm in front of robot
+            # average the lm estimate if multiple faces detected
             mean_centre = np.mean(est_centres_cc, axis=0).reshape(-1, 1)
             adjusted_mean_centre = mean_centre
             
+            # return estimate for given lm
             lm_measurement = measure.Marker(adjusted_mean_centre, idi)
             measurements.append(lm_measurement)
-            
-            #print(f"lm_rvecs: {lm_rvecs}")
-            #print(f"lm_rmats: {lm_rmats}")
-            #print(f"rotated offsets: {rotated_offsets}")
-            #print(f"robot offsets: {robot_offsets}")
-            print(f"est_centres_cc: {est_centres_cc}")
-            print(f"id, mean centers: {idi}, {mean_centre}")
             
         
         # Draw markers on image copy

@@ -85,8 +85,8 @@ if __name__ == '__main__':
     import argparse
 
     parser = argparse.ArgumentParser("Matching the maps before and after delivery")
-    parser.add_argument("--original", type=str, default='M4_marking_map.txt')
-    parser.add_argument("--current", type=str, default='layout_after_delivery.txt')
+    parser.add_argument("--original", type=str, default='/home/blayke/catkin_ws/src/penguinpi_gazebo/TRUEMAP.txt')
+    parser.add_argument("--current", type=str, default='/home/blayke/catkin_ws/src/penguinpi_gazebo/layout_after_delivery.txt')
     args, _ = parser.parse_known_args()
 
     # read in maps before and after delivery

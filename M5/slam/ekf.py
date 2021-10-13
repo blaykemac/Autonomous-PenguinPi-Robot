@@ -307,12 +307,22 @@ class EKF:
 
     # Plotting functions
     # ------------------
+    """
     @ staticmethod
     def to_im_coor(xy, res, m2pixel):
         w, h = res
         x, y = xy
         x_im = int(-x*m2pixel+w/2.0)
         y_im = int(y*m2pixel+h/2.0)
+        return (x_im, y_im)
+        """
+        
+    @ staticmethod
+    def to_im_coor(xy, res, m2pixel):
+        w, h = res
+        x, y = xy
+        x_im = int(x*m2pixel+w/2.0)
+        y_im = int(-y*m2pixel+h/2.0)
         return (x_im, y_im)
 
     def draw_slam_state(self, res = (320, 500), not_pause=True):
@@ -351,8 +361,10 @@ class EKF:
 
         surface = pygame.surfarray.make_surface(np.rot90(canvas))
         surface = pygame.transform.flip(surface, True, False)
-        surface.blit(self.rot_center(self.pibot_pic, robot_theta*57.3),
+        surface.blit(self.rot_center(self.pibot_pic, 180+robot_theta*57.3),
                     (start_point_uv[0]-15, start_point_uv[1]-15))
+        #surface.blit(self.rot_center(self.pibot_pic, robot_theta*57.3),
+                    #(start_point_uv[0]-15, start_point_uv[1]-15))
         if self.number_landmarks() > 0:
             for i in range(len(self.markers[0,:])):
                 xy = (lms_xy[0, i], lms_xy[1, i])
