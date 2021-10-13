@@ -36,6 +36,7 @@ from network.scripts.detector import Detector
 
 # import the helper functions
 from helper import *
+from helper_james import *
 
 class Operate:
     def __init__(self, args):
@@ -417,6 +418,30 @@ class Operate:
             if event.type == pygame.MOUSEBUTTONDOWN and not self.args.nogui:
                 pos = pygame.mouse.get_pos()
                 
+                
+                # flag that tells us if the gui has been clicked (used to help auto navigation)
+                self.gui_clicked = True
+                
+                
+                # then we actually clicked in the semiauto window
+                if pos[0] >= self.default_width and self.args.auto:
+                    x,y = pix_to_world(pos[0], pos[1], self.u0, self.v0, self.semiauto_gui_width)
+                    
+                    start_point = self.ekf.robot.state[:2].T
+                    finish_point = np.array([x,y])
+                    
+                    #self.keyboard_overridden = False
+                    #self.finished_navigating = False
+                    #self.turning = True
+                
+                    # this list returns the sequence of waypoints from finish to start (so its in reverse order), including the robot initial position
+                    self.auto_waypoint_list = self.generate_waypoint_list(start_point, finish_point)
+                    
+                    # we remove the last element of the list, because generate_waypoint_list 
+                    # includes the starting position of the robot, which we are already located at
+                    self.auto_waypoint_list.pop()
+                    
+                
                 # then we actually clicked in the semiauto window
                 if pos[0] >= self.default_width:
                     x,y = pix_to_world(pos[0], pos[1], self.u0, self.v0, self.semiauto_gui_width)
@@ -466,12 +491,47 @@ class Operate:
         """ Add code that genrates waypoint automatically
     
         """
-        if self.args.auto:
-            #self.waypoint = np.array([x, y])
+        if self.args.auto and self.finished_navigating and self.gui_clicked:
+            self.waypoint = self.auto_waypoint_list.pop()
             self.turning = True
             self.finished_navigating = False
+            self.gui_clicked = False
             pass
                 
+    def generate_waypoint_list(self, start_point, goal_point):
+        
+        r_true_apple = 0.075
+        r_true_lemon = 0.06
+        r_true_person = 0.19
+        r_true_marker = 0.1
+
+        scale = 0.04
+
+        r_true_apple += scale
+        r_true_lemon += scale
+        r_true_person += scale
+        r_true_marker += scale
+     
+        all_obstacles = []
+        for entry in apple_gt:
+            all_obstacles.append(CircleT(entry[1], entry[0], r_true_apple, 0))
+
+        for entry in lemon_gt:
+            all_obstacles.append(CircleT(entry[1], entry[0], r_true_lemon, 1))
+    
+        for entry in person_gt:
+            all_obstacles.append(CircleT(entry[1], entry[0], r_true_person, 2))
+    
+        for entry in marker_gt:
+            all_obstacles.append(CircleT(entry[1], entry[0], r_true_marker, 3))
+            
+
+        rrt = RRT(start=start_point, goal=goal_point, width=1.4, height=1.4, obstacle_list=all_obstacles, expand_dis=0.4, path_resolution=0.04)
+        
+        return rrt.planning()
+            
+        
+        
 
 """
     def blind_drive(self):
