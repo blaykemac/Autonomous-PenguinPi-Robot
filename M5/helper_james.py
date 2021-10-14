@@ -672,28 +672,32 @@ class RRT:
 
         self.node_list = [self.start]
         while len(self.node_list) <= self.max_nodes:
-        
+            #print(f"nodelist {len(self.node_list)}")
             
             # 1. Generate a random node           
             rnd_node = self.get_random_node()
+            #print(f"rnd_node: {rnd_node.x}, {rnd_node.y}")
             
             # 2. Find node in tree that is closest to sampled node.
             # This is the node to be expanded (q_expansion)
             expansion_ind = self.get_nearest_node_index(self.node_list, rnd_node)
             expansion_node = self.node_list[expansion_ind]
-
+            #print(f"exp_node: {expansion_node.x}, {expansion_node.y}")
             # 3. Select a node (nearby_node) close to expansion_node by moving from expantion_node to rnd_node
             
             nearby_node = self.steer(expansion_node, rnd_node, self.expand_dis)
+            #print(f"nearby_node: {nearby_node.x}, {nearby_node.y}")
 
             # 4. Check if nearby_node is in free space (i.e., it is collision free). If collision free, add node
             # to self.node_list
             
             if self.is_collision_free(nearby_node):
+                #print("colision free")
                 self.node_list.append(nearby_node)
                 
             # If we are close to goal, stop expansion and generate path
             if self.calc_dist_to_goal(self.node_list[-1].x, self.node_list[-1].y) <= self.expand_dis:
+                #print("close to goal")
                 final_node = self.steer(self.node_list[-1], self.end, self.expand_dis)
                 if self.is_collision_free(final_node):
                     return self.generate_final_course(len(self.node_list) - 1)
@@ -744,11 +748,16 @@ class RRT:
         if new_node is None:
             return True
 
+        #print(f"total obs: {len(self.obstacle_list)}")
+
         points = np.vstack((new_node.path_x, new_node.path_y)).T
         for obs in self.obstacle_list:
+            #print(f"obs:{obs.radius}, {obs.center}")
             in_collision = obs.is_in_collision_with_points(points)
+            #print(f"in collision: {in_collision}")
             if in_collision:
                 return False
+            #print(f"past col")
         
         return True  # safe
         
@@ -759,9 +768,11 @@ class RRT:
         """
         path = [np.array([float(self.end.x), float(self.end.y)])]
         node = self.node_list[goal_ind]
+        #print(node)
         while node.parent is not None:
             path.append(np.array([float(node.x), float(node.y)]))
             node = node.parent
+            #print(node)
                         
         path.append(np.array([float(node.x), float(node.y)]))
 

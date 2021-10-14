@@ -109,7 +109,7 @@ class Operate:
         self.r_true_lemon = 0.06
         self.r_true_person = 0.19
         self.r_true_marker = 0.1
-        self.obstacle_padding = 0.04
+        self.obstacle_padding = 0.06
         self.r_true_apple += self.obstacle_padding
         self.r_true_lemon += self.obstacle_padding
         self.r_true_person += self.obstacle_padding
@@ -297,6 +297,10 @@ class Operate:
         if not self.args.nogui:
             # if reading object coordinates from TRUEMAP instead of through SLAM for semiauto GUI
             if self.args.truemap:
+                pygame.draw.rect(self.canvas, self.WHITE, pygame.Rect(self.default_width, 0, self.semiauto_gui_width, self.default_height))
+                pos = world_to_pix(self.ekf.robot.state[0][0], self.ekf.robot.state[1][0], self.u0, self.v0, self.semiauto_gui_width)
+                pygame.draw.circle(self.canvas, (40, 40, 40), pos, self.RADIUS*1.5)
+            
                 for apple in self.apple_gt:
                     pos = world_to_pix(apple[1], apple[0], self.u0, self.v0, self.semiauto_gui_width)
                     pygame.draw.circle(self.canvas, self.RED, pos, self.RADIUS)
@@ -487,23 +491,19 @@ class Operate:
                 self.finished_navigating = True
                 self.turning = True
                
-        # done navigating, so check if pending waypoint and send command
-        else:
-            if self.auto_waypoint_list:
-                self.waypoint = self.auto_waypoint_list.pop()
-            
     def automate_waypoint(self):
         """ Add code that genrates waypoint automatically
     
         """
-        if self.args.auto and self.finished_navigating and self.gui_clicked:
+        #if self.args.auto and self.finished_navigating and self.gui_clicked:
+        if self.args.auto and self.finished_navigating and self.auto_waypoint_list:
             self.waypoint = self.auto_waypoint_list.pop()
             self.turning = True
             self.finished_navigating = False
             self.gui_clicked = False
             pass
                 
-    def generate_waypoint_list(self, start_point, goal_point):
+    def generate_waypoint_list(self, start_point, goal_point, timeout = 100):
         all_obstacles = []
         for entry in self.apple_gt:
             all_obstacles.append(CircleT(entry[1], entry[0], self.r_true_apple, 0))
@@ -517,10 +517,16 @@ class Operate:
         for entry in self.aruco_gt:
             all_obstacles.append(CircleT(entry[1], entry[0], self.r_true_marker, 3))
                     
-        print(f"start, end goal: {start_point, goal_point}")
         #rrt = RRT(start=start_point, goal=goal_point, width=1.4, height=1.4, obstacle_list=all_obstacles, expand_dis=0.2, path_resolution=0.04)
+        timeout_counter = 1
         rrt = RRT(start=start_point, goal=goal_point, width=1.4, height=1.4, obstacle_list=all_obstacles, expand_dis=0.4, path_resolution=0.04)
+        plan = rrt.planning()
         
-        return rrt.planning()
+        while not plan and timeout_counter <= timeout:
+            print("Path generation failed, attempting again...")
+            plan = rrt.planning()
+            timeout_counter += 1
+        
+        return plan
             
         
