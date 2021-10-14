@@ -619,13 +619,7 @@ def animate_path_prm(rmap,start, goal, num_samples, robot_size, max_distance, ma
 ###### RRT CLASS CODE ######
 
 # This is an adapted version of the RRT implementation done by Atsushi Sakai (@Atsushi_twi)
-
-class RRT:
-    """
-    Class for RRT planning
-    """
-
-    class Node:
+class Node:
         """
         RRT Node
         """
@@ -636,7 +630,13 @@ class RRT:
             self.path_x = []
             self.path_y = []
             self.parent = None
-
+            
+            
+class RRT:
+    """
+    Class for RRT planning
+    """
+    
     def __init__(self, start=np.zeros(2),
                  goal=np.array([120,90]),
                  obstacle_list=None,
@@ -644,7 +644,7 @@ class RRT:
                  height=100,
                  expand_dis=3.0, 
                  path_resolution=0.5, 
-                 max_points=500):
+                 max_points=50):
         """
         Setting Parameter
         start:Start Position [x,y]
@@ -654,8 +654,8 @@ class RRT:
         expand_dis: min distance between random node and closest node in rrt to it
         path_resolion: step size to considered when looking for node to expand
         """
-        self.start = self.Node(start[0], start[1])
-        self.end = self.Node(goal[0], goal[1])
+        self.start = Node(start[0], start[1])
+        self.end = Node(goal[0], goal[1])
         self.width = width
         self.height = height
         self.expand_dis = expand_dis
@@ -672,6 +672,7 @@ class RRT:
 
         self.node_list = [self.start]
         while len(self.node_list) <= self.max_nodes:
+        
             
             # 1. Generate a random node           
             rnd_node = self.get_random_node()
@@ -706,7 +707,7 @@ class RRT:
         is “closer” to to_node than from_node is.
         """
         
-        new_node = self.Node(from_node.x, from_node.y)
+        new_node = Node(from_node.x, from_node.y)
         d, theta = self.calc_distance_and_angle(new_node, to_node)
         cos_theta, sin_theta = np.cos(theta), np.sin(theta)
 
@@ -756,12 +757,13 @@ class RRT:
         """
         Reconstruct path from start to end node
         """
-        path = [[self.end.x, self.end.y]]
+        path = [np.array([float(self.end.x), float(self.end.y)])]
         node = self.node_list[goal_ind]
         while node.parent is not None:
-            path.append([node.x, node.y])
+            path.append(np.array([float(node.x), float(node.y)]))
             node = node.parent
-        path.append([node.x, node.y])
+                        
+        path.append(np.array([float(node.x), float(node.y)]))
 
         return path
 
@@ -773,7 +775,7 @@ class RRT:
     def get_random_node(self):
         x = self.width * np.random.random_sample() * (-1 if np.random.randint(0,2) else 1)
         y = self.height * np.random.random_sample() * (-1 if np.random.randint(0,2) else 1)
-        rnd = self.Node(x, y)
+        rnd = Node(x, y)
         return rnd
 
     @staticmethod

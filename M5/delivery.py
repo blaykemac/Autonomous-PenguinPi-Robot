@@ -25,7 +25,8 @@ if __name__ == "__main__":
     # Initialise the main robot controller
     operator = operate.Operate(args)
     
-    try:
+    #try:
+    if True: ##### TEMP
         # main control loop where we run all necessary functions in class Operate()
         while True:
             # check for any events such as keyboard or mouse presses
@@ -57,9 +58,10 @@ if __name__ == "__main__":
             operator.draw()
             pygame.display.update()
             
+    """
     except Exception as exc:
         # stop robot from moving if script crashes or we close program
         operator.pibot.set_velocity([0, 0])
         print(exc)
-        
         pass
+     """   

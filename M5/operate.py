@@ -114,6 +114,7 @@ class Operate:
         self.r_true_lemon += self.obstacle_padding
         self.r_true_person += self.obstacle_padding
         self.r_true_marker += self.obstacle_padding
+        self.auto_waypoint_list = []
         
         # optionally load the true map instead of using SLAM to draw object locations
         if args.truemap:
@@ -425,9 +426,9 @@ class Operate:
                 if pos[0] >= self.default_width and self.args.auto:
                     x,y = pix_to_world(pos[0], pos[1], self.u0, self.v0, self.semiauto_gui_width)
                     
-                    start_point = self.ekf.robot.state[:2].T
+                    start_point = np.array([self.ekf.robot.state[0][0], self.ekf.robot.state[1][0]])
                     finish_point = np.array([x,y])
-                    
+                                        
                     self.keyboard_overridden = False
                     self.finished_navigating = False
                     self.turning = True
@@ -437,8 +438,11 @@ class Operate:
                     
                     # we remove the last element of the list, because generate_waypoint_list 
                     # includes the starting position of the robot, which we are already located at
-                    self.auto_waypoint_list.pop() 
-                
+                    if self.auto_waypoint_list:
+                        self.auto_waypoint_list.pop()
+                    else:
+                        print("Failed to generate waypoint list")
+                                    
                 # then we are setting a manual waypoint through the GUI
                 elif pos[0] >= self.default_width:
                     x,y = pix_to_world(pos[0], pos[1], self.u0, self.v0, self.semiauto_gui_width)
@@ -452,7 +456,6 @@ class Operate:
                 self.turning = True
                 
         if self.quit:
-            #self.pibot.set_velocity([0, 0])
             pygame.quit()
             sys.exit()
     
@@ -483,7 +486,12 @@ class Operate:
                 self.command['motion'] = [0,0]
                 self.finished_navigating = True
                 self.turning = True
-                
+               
+        # done navigating, so check if pending waypoint and send command
+        else:
+            if self.auto_waypoint_list:
+                self.waypoint = self.auto_waypoint_list.pop()
+            
     def automate_waypoint(self):
         """ Add code that genrates waypoint automatically
     
@@ -496,7 +504,6 @@ class Operate:
             pass
                 
     def generate_waypoint_list(self, start_point, goal_point):
-        #print("here")
         all_obstacles = []
         for entry in self.apple_gt:
             all_obstacles.append(CircleT(entry[1], entry[0], self.r_true_apple, 0))
@@ -509,9 +516,11 @@ class Operate:
     
         for entry in self.aruco_gt:
             all_obstacles.append(CircleT(entry[1], entry[0], self.r_true_marker, 3))
-            
+                    
+        print(f"start, end goal: {start_point, goal_point}")
+        #rrt = RRT(start=start_point, goal=goal_point, width=1.4, height=1.4, obstacle_list=all_obstacles, expand_dis=0.2, path_resolution=0.04)
         rrt = RRT(start=start_point, goal=goal_point, width=1.4, height=1.4, obstacle_list=all_obstacles, expand_dis=0.4, path_resolution=0.04)
-        #print("after")
+        
         return rrt.planning()
             
         
