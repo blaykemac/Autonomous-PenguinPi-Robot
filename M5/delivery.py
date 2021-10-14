@@ -25,21 +25,6 @@ if __name__ == "__main__":
     # Initialise the main robot controller
     operator = operate.Operate(args)
     
-    """ Uncomment this if you want to force a button press before starting GUI
-    start = False
-
-    counter = 40
-    while not start:
-        for event in pygame.event.get():
-            if event.type == pygame.KEYDOWN:
-                start = True
-        canvas.blit(splash, (0, 0))
-        x_ = min(counter, 600)
-        if x_ < 600:
-            canvas.blit(pibot_animate[counter%10//2], (x_, 565))
-            pygame.display.update()
-            counter += 2
-    """
     try:
         # main control loop where we run all necessary functions in class Operate()
         while True:
@@ -71,9 +56,6 @@ if __name__ == "__main__":
             # visualise
             operator.draw()
             pygame.display.update()
-            
-            # print state for debugging
-            print(f"ekf state: {operator.ekf.robot.state}")
             
     except Exception as exc:
         # stop robot from moving if script crashes or we close program

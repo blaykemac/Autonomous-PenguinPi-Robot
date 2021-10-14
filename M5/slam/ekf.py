@@ -254,10 +254,6 @@ class EKF:
             lm_bff = lm.position #+ offset
             lm_inertial = robot_xy + R_theta @ lm_bff
             
-            # print readings for testing
-            print(f"lm_inertial: {lm_inertial}")
-            print(f"robot_xy: {robot_xy}")
-            
             self.taglist.append(int(lm.tag))
             self.markers = np.concatenate((self.markers, lm_inertial), axis=1)
 

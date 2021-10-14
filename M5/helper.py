@@ -160,9 +160,6 @@ def parse_map(fname: str) -> dict:
         # fill aruco_gt list with 10 blank coordinates
         aruco_gt = [np.array([0,0])] * 10
         #print(f"aruco_gt: {aruco_gt}")
-        
-        #delete later
-        #print(f"gt_dict: {gt_dict}")
 
         # remove unique id of targets of the same type 
         for key in gt_dict:

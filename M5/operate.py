@@ -2,7 +2,6 @@
 # Final fruit delivery control code
 ##########################################################
 
-
 # import modules
 import sys, os
 import ast
@@ -13,7 +12,6 @@ import pygame
 import cv2
 import time
 import math
-
 
 # import utility functions
 sys.path.insert(0, "{}/util".format(os.getcwd()))
@@ -28,11 +26,9 @@ from slam.ekf import EKF
 from slam.robot import Robot
 import slam.aruco_detector as aruco
 
-
 # import CV components
-sys.path.insert(0,"{}/network/".format(os.getcwd()))
-sys.path.insert(0,"{}/network/scripts".format(os.getcwd()))
-from network.scripts.detector import Detector
+sys.path.insert(0,"{}/cv/".format(os.getcwd()))
+from cv.detector import Detector
 
 # import the helper functions
 from helper import *
@@ -56,9 +52,12 @@ class Operate:
 
         # initialise SLAM parameters
         self.ekf = self.init_ekf(args.calib_dir, args.ip)
+        self.ekf_on = False
         self.aruco_det = aruco.aruco_detector(
             self.ekf.robot, marker_length = 0.07) # size of the ARUCO markers
+        self.request_recover_robot = False
 
+        # initialise default GUI parameters
         if args.save_data:
             self.data = dh.DatasetWriter('record')
         else:
@@ -71,9 +70,7 @@ class Operate:
                         'save_image': False}
         self.quit = False
         self.pred_fname = ''
-        self.request_recover_robot = False
         self.file_output = None
-        self.ekf_on = False
         self.double_reset_confirm = 0
         self.image_id = 0
         self.notification = 'Press ENTER to start SLAM'
@@ -83,7 +80,7 @@ class Operate:
         self.start_time = time.time()
         self.control_clock = time.time()
         
-        # initialise images
+        # initialise images for default GUI
         self.img = np.zeros([240,320,3], dtype=np.uint8)
         self.aruco_img = np.zeros([240,320,3], dtype=np.uint8)
         self.detector_output = np.zeros([240,320], dtype=np.uint8)
@@ -94,13 +91,6 @@ class Operate:
             self.detector = Detector(args.ckpt, use_gpu=False) # DO I NEED TO SET 'USE GPU' TO TRUE IF WE CAN RUN ON MY DESKTOP MACHINE?
             self.network_vis = np.ones((240, 320,3))* 100
         self.bg = pygame.image.load('pics/gui_mask.jpg')
-        
-         # define some colours for drawing colours on pygame
-        self.RED = (255, 0, 0) # apple
-        self.YELLOW = (255, 255, 0) #lemon
-        self.WHITE = (255,  255, 255) #background
-        self.BLUE = (0, 0, 255) #aruco
-        self.BLACK = (0, 0, 0) #person
         
         # initialise waypoint
         self.waypoint = np.array([0.0, 0.0])
@@ -114,17 +104,36 @@ class Operate:
         self.K_pv = 1
         self.dist_tolerance = 0.1 #metres
         
+        # initialise rrt parameters
+        self.r_true_apple = 0.075
+        self.r_true_lemon = 0.06
+        self.r_true_person = 0.19
+        self.r_true_marker = 0.1
+        self.obstacle_padding = 0.04
+        self.r_true_apple += self.obstacle_padding
+        self.r_true_lemon += self.obstacle_padding
+        self.r_true_person += self.obstacle_padding
+        self.r_true_marker += self.obstacle_padding
+        
         # optionally load the true map instead of using SLAM to draw object locations
         if args.truemap:
             # read true coordinates of map from gazebo backend
             self.apple_gt, self.lemon_gt, self.person_gt, self.aruco_gt = parse_map(args.map)
-            print("Map: \napple = {}, \nlemon = {}, \nperson = {}, \naruco = {}".format(self.apple_gt, self.lemon_gt, self.person_gt, self.aruco_gt))
+            #print("Map: \napple = {}, \nlemon = {}, \nperson = {}, \naruco = {}".format(self.apple_gt, self.lemon_gt, self.person_gt, self.aruco_gt))
 
             # find apple(s) and lemon(s) that need to be moved
-            to_move = compute_dist(self.apple_gt, self.lemon_gt, self.person_gt)
-            print("Fruits to be moved: ", to_move)
+            #to_move = compute_dist(self.apple_gt, self.lemon_gt, self.person_gt)
             
         # initialise semiauto GUI
+        
+        # define some colours for drawing colours on pygame
+        self.RED = (255, 0, 0) # apple
+        self.YELLOW = (255, 255, 0) #lemon
+        self.WHITE = (255,  255, 255) #background
+        self.BLUE = (0, 0, 255) #aruco
+        self.BLACK = (0, 0, 0) #person
+        
+        self.gui_clicked = False
         
         pygame.font.init()
         self.default_width, self.default_height = 700, 660
@@ -145,19 +154,10 @@ class Operate:
         pygame.display.set_icon(pygame.image.load('pics/8bit/pibot5.png'))
         self.canvas.fill(self.WHITE)
         
-        
-        """ These images are used in menu that waits for button press to start, uncomment if adding that menu back
-        self.pibot_animate = [pygame.image.load('pics/8bit/pibot1.png'),
-                         pygame.image.load('pics/8bit/pibot2.png'),
-                         pygame.image.load('pics/8bit/pibot3.png'),
-                        pygame.image.load('pics/8bit/pibot4.png'),
-                         pygame.image.load('pics/8bit/pibot5.png')]
-         """
         pygame.init()
         self.font = pygame.font.SysFont("Arial", 15)
         self.TITLE_FONT = pygame.font.Font('pics/8-BitMadness.ttf', 35)
         self.TEXT_FONT = pygame.font.Font('pics/8-BitMadness.ttf', 40)
-        #splash = pygame.image.load('pics/loading.png') # uncomment this for the menu that waits for button press
         pygame.display.update()
             
     # wheel control
@@ -418,32 +418,29 @@ class Operate:
             if event.type == pygame.MOUSEBUTTONDOWN and not self.args.nogui:
                 pos = pygame.mouse.get_pos()
                 
-                
                 # flag that tells us if the gui has been clicked (used to help auto navigation)
-                self.gui_clicked = True
+                self.gui_clicked = True 
                 
-                
-                # then we actually clicked in the semiauto window
+                # set manual waypoint and navigate safely 
                 if pos[0] >= self.default_width and self.args.auto:
                     x,y = pix_to_world(pos[0], pos[1], self.u0, self.v0, self.semiauto_gui_width)
                     
                     start_point = self.ekf.robot.state[:2].T
                     finish_point = np.array([x,y])
                     
-                    #self.keyboard_overridden = False
-                    #self.finished_navigating = False
-                    #self.turning = True
+                    self.keyboard_overridden = False
+                    self.finished_navigating = False
+                    self.turning = True
                 
                     # this list returns the sequence of waypoints from finish to start (so its in reverse order), including the robot initial position
                     self.auto_waypoint_list = self.generate_waypoint_list(start_point, finish_point)
                     
                     # we remove the last element of the list, because generate_waypoint_list 
                     # includes the starting position of the robot, which we are already located at
-                    self.auto_waypoint_list.pop()
-                    
+                    self.auto_waypoint_list.pop() 
                 
-                # then we actually clicked in the semiauto window
-                if pos[0] >= self.default_width:
+                # then we are setting a manual waypoint through the GUI
+                elif pos[0] >= self.default_width:
                     x,y = pix_to_world(pos[0], pos[1], self.u0, self.v0, self.semiauto_gui_width)
                     self.waypoint = np.array([x,y])
                     self.keyboard_overridden = False
@@ -499,69 +496,22 @@ class Operate:
             pass
                 
     def generate_waypoint_list(self, start_point, goal_point):
-        
-        r_true_apple = 0.075
-        r_true_lemon = 0.06
-        r_true_person = 0.19
-        r_true_marker = 0.1
-
-        scale = 0.04
-
-        r_true_apple += scale
-        r_true_lemon += scale
-        r_true_person += scale
-        r_true_marker += scale
-     
+        #print("here")
         all_obstacles = []
-        for entry in apple_gt:
-            all_obstacles.append(CircleT(entry[1], entry[0], r_true_apple, 0))
+        for entry in self.apple_gt:
+            all_obstacles.append(CircleT(entry[1], entry[0], self.r_true_apple, 0))
 
-        for entry in lemon_gt:
-            all_obstacles.append(CircleT(entry[1], entry[0], r_true_lemon, 1))
+        for entry in self.lemon_gt:
+            all_obstacles.append(CircleT(entry[1], entry[0], self.r_true_lemon, 1))
     
-        for entry in person_gt:
-            all_obstacles.append(CircleT(entry[1], entry[0], r_true_person, 2))
+        for entry in self.person_gt:
+            all_obstacles.append(CircleT(entry[1], entry[0], self.r_true_person, 2))
     
-        for entry in marker_gt:
-            all_obstacles.append(CircleT(entry[1], entry[0], r_true_marker, 3))
+        for entry in self.aruco_gt:
+            all_obstacles.append(CircleT(entry[1], entry[0], self.r_true_marker, 3))
             
-
         rrt = RRT(start=start_point, goal=goal_point, width=1.4, height=1.4, obstacle_list=all_obstacles, expand_dis=0.4, path_resolution=0.04)
-        
+        #print("after")
         return rrt.planning()
             
         
-        
-
-"""
-    def blind_drive(self):
-        
-        #Force the robot to turn and drive to waypoint blindly.
-        #NOTE TO USE THIS WITH SLAM, WE WOULD NEED TO RETURN DRIVE_MEAS SIMILAR TO HOW OPERATE.CONTROL WORKS
-        
-
-        wheel_vel = 30 # tick per second 
-        turning_vel = 5
-        
-        # turn towards the waypoint
-        angle_to_waypoint = np.arctan2((self.waypoint[1] - self.ekf.robot.state[1]) , (self.waypoint[0] - self.ekf.robot.state[0]))
-        delta_angle = np.arctan2(np.sin(angle_to_waypoint - self.ekf.robot.state[2]), np.cos(angle_to_waypoint - self.ekf.robot.state[2]))
-        modified_wheel_vel = turning_vel
-        if delta_angle < 0:
-            modified_wheel_vel *= -1
-        distance_turning = self.baseline / 2 * abs(delta_angle)
-        turn_time = distance_turning / (self.scale * turning_vel)
-        print("Turning for {:.2f} seconds".format(turn_time))
-        ppi.set_velocity([0, 1], turning_tick=modified_wheel_vel, time=turn_time)
-        
-        # after turning, drive straight to the waypoint
-        distance_straight = np.sqrt((self.waypoint[0] - self.ekf.robot.state[0])**2 + (self.waypoint[1] - self.ekf.robot.state[1])**2)
-        drive_time = distance_straight / (self.scale * wheel_vel) # replace with your calculation
-        print("Driving for {:.2f} seconds".format(drive_time))
-        ppi.set_velocity([1, 0], tick=wheel_vel, time=drive_time)
-
-        # update the robot pose [x,y,theta]
-        robot_pose = [self.waypoint[0], self.waypoint[1], angle_to_waypoint] 
-        ####################################################
-        return robot_pose
-"""
