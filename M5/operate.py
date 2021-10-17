@@ -518,15 +518,30 @@ class Operate:
             all_obstacles.append(CircleT(entry[1], entry[0], self.r_true_marker, 3))
                     
         #rrt = RRT(start=start_point, goal=goal_point, width=1.4, height=1.4, obstacle_list=all_obstacles, expand_dis=0.2, path_resolution=0.04)
-        timeout_counter = 1
+        
         rrt = RRT(start=start_point, goal=goal_point, width=1.4, height=1.4, obstacle_list=all_obstacles, expand_dis=0.4, path_resolution=0.04)
-        plan = rrt.planning()
         
-        while not plan and timeout_counter <= timeout:
-            print("Path generation failed, attempting again...")
-            plan = rrt.planning()
-            timeout_counter += 1
-        
-        return plan
+        # generate plans and try choose the best one based off-
+        # number of nodes and total distance travelled.
+        plans = []
+        self.MAX_PLANS = 20
+        for plans_index in range(self.MAX_PLANS):
+            timeout_counter = 1
+            # only attempt to make a plan a finite amount of time
+            while timeout_counter <= timeout:
+                timeout_counter += 1
+                plan = rrt.planning()
+                if plan:
+                    plans.append(plan)
+                    break
+        plan_lengths = [len(plan) for plan in plans]
+        min_plans_length = min(plan_lengths)
+        for index, plan_length in enumerate(plan_lengths):
+            if plan_length == min_plans_length:
+                return plans[index]
+
+        print([len(plan) for plan in plans])
+        print(len(optimal_plan))
+        return optimal_plan
             
         
