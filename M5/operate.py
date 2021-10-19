@@ -29,6 +29,7 @@ import slam.aruco_detector as aruco
 # import CV components
 sys.path.insert(0,"{}/cv/".format(os.getcwd()))
 from cv.detector import Detector
+from cv.yolo_detector import YOLODetector
 
 # import the helper functions
 from helper import *
@@ -89,6 +90,7 @@ class Operate:
             self.network_vis = cv2.imread('pics/8bit/detector_splash.png')
         else:
             self.detector = Detector(args.ckpt, use_gpu=False) # DO I NEED TO SET 'USE GPU' TO TRUE IF WE CAN RUN ON MY DESKTOP MACHINE?
+            self.yolo_detector = YOLODetector()
             self.network_vis = np.ones((240, 320,3))* 100
         self.bg = pygame.image.load('pics/gui_mask.jpg')
         
@@ -202,6 +204,7 @@ class Operate:
     def detect_target(self):
         if self.command['inference'] and self.detector is not None:
             self.detector_output, self.network_vis = self.detector.detect_single_image(self.img)
+            self.bounding_box = self.yolo_detector.inference(self.img)
             self.command['inference'] = False
             self.file_output = (self.detector_output, self.ekf)
             self.notification = f'{len(np.unique(self.detector_output))-1} target type(s) detected'
