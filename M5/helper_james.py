@@ -717,8 +717,8 @@ def push_bad_lemon_away(lemon, obs, robot_collinear_space = 0.1):
                 break
         if not bad:
             successful.append(potential_point)
-    
-    #print(f"{np.array(successful)}")
+    print(f"potenital traj: {potential_traj}")
+    print(f"successful: {np.array(successful)}")
     
     if len(successful) == 0:
         raise ValueError("failed to push lemon ", lemon[2])
@@ -932,4 +932,4 @@ def generate_fruit_path(unpaired_apple_input, unpaired_person_input, bad_lemon_i
         if length < best_sol[1]:
             best_sol = (seq, length)
 
-    return np.array(best_sol[0])
+    return best_sol[0]

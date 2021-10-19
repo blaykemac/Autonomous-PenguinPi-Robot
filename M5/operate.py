@@ -120,7 +120,7 @@ class Operate:
         self.r_true_lemon = 0.06
         self.r_true_person = 0.19
         self.r_true_marker = 0.1
-        self.obstacle_padding = 0.06
+        self.obstacle_padding = 0.06 * 0
         self.r_true_apple += self.obstacle_padding
         self.r_true_lemon += self.obstacle_padding
         self.r_true_person += self.obstacle_padding
@@ -496,7 +496,7 @@ class Operate:
                 
                 # we remove the last element of the list, because generate_waypoint_list 
                 # includes the starting position of the robot, which we are already located at
-                if self.auto_waypoint_list:
+                if len(self.auto_waypoint_list) > 0:
                     self.auto_waypoint_list.pop()
                 else:
                     print("Failed to generate waypoint list")
@@ -542,7 +542,7 @@ class Operate:
                     
                     # we remove the last element of the list, because generate_waypoint_list 
                     # includes the starting position of the robot, which we are already located at
-                    if self.auto_waypoint_list:
+                    if len(self.auto_waypoint_list) > 0:
                         self.auto_waypoint_list.pop()
                     else:
                         print("Failed to generate waypoint list")
@@ -596,7 +596,7 @@ class Operate:
     
         """
         #if self.args.auto and self.finished_navigating and self.gui_clicked:
-        if self.args.auto and self.finished_navigating and self.auto_waypoint_list:
+        if self.args.auto and self.finished_navigating and len(self.auto_waypoint_list) > 0:
             self.waypoint = self.auto_waypoint_list.pop()
             self.turning = True
             self.finished_navigating = False
@@ -618,6 +618,7 @@ class Operate:
             all_obstacles.append(CircleT(entry[0], entry[1], self.r_true_marker, 3))
                     
         lemon_not_done = objects_not_done(self.object_locations[0], self.object_locations[1], self.object_locations[2])
+        print(f"lemon not done: {lemon_not_done}")
         return generate_fruit_path(0, 0, lemon_not_done, all_obstacles,start_point, 20)
         #rrt = RRT(start=start_point, goal=goal_point, width=1.4, height=1.4, obstacle_list=all_obstacles, expand_dis=0.2, path_resolution=0.04)
         
