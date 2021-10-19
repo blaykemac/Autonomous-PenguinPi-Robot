@@ -20,6 +20,7 @@ if __name__ == "__main__":
     parser.add_argument("--ckpt", default='weights/best.pt') # specifies nn model path
     parser.add_argument("--nogui", action='store_true') # disables semiauto GUI
     parser.add_argument("--auto", action='store_true') # enable full auto delivery
+  
     args, _ = parser.parse_known_args()
 
     # Initialise the main robot controller

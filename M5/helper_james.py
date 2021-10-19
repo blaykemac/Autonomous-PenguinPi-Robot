@@ -775,8 +775,10 @@ def generate_object_circle_lists(object_array, aruco_markers):
 
     map1 = [apple_gt, lemon_gt, person_gt]
     for i in range(len(object_array)):
-        for j in range len(object_array[i]):
+        for j in range(len(object_array[i])):
             map1[i].append([object_array[i][0], object_array[i][1], j])
+            
+    marker_gt = aruco_markers
     
     r_true_apple = 0.075
     r_true_lemon = 0.06
@@ -810,7 +812,7 @@ def generate_object_circle_lists(object_array, aruco_markers):
 def objects_not_done(apple_gt, lemon_gt, person_gt):
     goal_thresh = 0.6
     
-    
+    """
     ## FIX LATER
     for person_idx, person in enumerate(person_gt):
         for apple_idx, apple in enumerate(apple_gt):
@@ -823,16 +825,16 @@ def objects_not_done(apple_gt, lemon_gt, person_gt):
                 
     people_not_done = [n for n in person_gt if n[0] not in people_done]
     apples_not_done = [n for n in apple_gt if n[0] not in apples_done]
-
+"""
     lemons_not_done = []
-    for lemon in lemon_gt:
+    for lemon_index, lemon in enumerate(lemon_gt):
         for person in person_gt:
             if np.linalg.norm(person[0:2] - lemon[0:2]) < goal_thresh:
-                lemons_not_done.append(lemon)
+                lemons_not_done.append([lemon[0], lemon[1], lemon_index])
                 break
                 
-    return apples_not_done, lemons_not_done, people_not_done
-
+    #return apples_not_done, lemons_not_done, people_not_done
+    return lemons_not_done
 
 
 def generate_fruit_path(unpaired_apple_input, unpaired_person_input, bad_lemon_input, all_obstacles, initial_point, iterations):
@@ -840,12 +842,11 @@ def generate_fruit_path(unpaired_apple_input, unpaired_person_input, bad_lemon_i
     # initial conditions
     best_sol = ([], np.inf)
     
-    iterations = 20
     for i in range(iterations):
         # try a path combination
         #unpaired_apple = [] # list of apples not yet paired
         #unpaired_person = [] # list of people without apple
-        bad_lemon = bad_lemon.copy() # list of lemons requiring moving
+        bad_lemon= bad_lemon_input.copy() # list of lemons requiring moving
 
         #done_apple = False
         done_lemon = False

@@ -370,7 +370,33 @@ class Operate:
             # otherwise use SLAM locations of objects to draw in semiauto GUI
             else:
                 # TO DO - IMPLEMENT THIS CASE
-                pass
+                pygame.draw.rect(self.canvas, self.WHITE, pygame.Rect(self.default_width, 0, self.semiauto_gui_width, self.default_height))
+                pos = world_to_pix(self.ekf.robot.state[0][0], self.ekf.robot.state[1][0], self.u0, self.v0, self.semiauto_gui_width)
+                pygame.draw.circle(self.canvas, (40, 40, 40), pos, self.RADIUS*1.5)
+            
+                for apple in self.object_locations[0]:
+                    if apple is not None:
+                        pos = world_to_pix(apple[1], apple[0], self.u0, self.v0, self.semiauto_gui_width)
+                        pygame.draw.circle(self.canvas, self.RED, pos, self.RADIUS)
+                    
+                for lemon in self.object_locations[1]:
+                    if lemon is not None:
+                        pos = world_to_pix(lemon[1], lemon[0], self.u0, self.v0, self.semiauto_gui_width)
+                        pygame.draw.circle(self.canvas, self.YELLOW, pos, self.RADIUS)
+                    
+                for person in self.object_locations[2]:
+                    if person is not None:
+                        pos = world_to_pix(person[1], person[0], self.u0, self.v0, self.semiauto_gui_width)
+                        pygame.draw.circle(self.canvas, self.BLACK, pos, self.RADIUS)
+                """
+                for index, aruco in enumerate(self.aruco_gt):
+                    pos = world_to_pix(aruco[1], aruco[0], self.u0, self.v0, self.semiauto_gui_width)
+                    text_offset = (5, 5)
+                    text_pos = tuple(map(lambda i, j: i + j, pos, text_offset))
+                    pygame.draw.circle(self.canvas, self.BLUE, text_pos, self.RADIUS)
+                    text = self.font.render(str(index + 1), True, self.WHITE)
+                    self.canvas.blit(text, pos)
+                    """
 
     @staticmethod
     def draw_pygame_window(canvas, cv2_img, position):
@@ -458,6 +484,22 @@ class Operate:
             # save object detection outputs
             elif event.type == pygame.KEYDOWN and event.key == pygame.K_n:
                 self.command['save_inference'] = True
+                
+            # save object detection outputs
+            elif event.type == pygame.KEYDOWN and event.key == pygame.K_a:
+                self.auto_waypoint_enabled = True
+                
+                start_point = np.array([self.ekf.robot.state[0][0], self.ekf.robot.state[1][0]])
+                finish_point = np.array([0,0]) # set to this because finish point overwwritten byrrt anyway
+                # this list returns the sequence of waypoints from finish to start (so its in reverse order), including the robot initial position
+                self.auto_waypoint_list = self.generate_waypoint_list(start_point, finish_point)
+                
+                # we remove the last element of the list, because generate_waypoint_list 
+                # includes the starting position of the robot, which we are already located at
+                if self.auto_waypoint_list:
+                    self.auto_waypoint_list.pop()
+                else:
+                    print("Failed to generate waypoint list")
                 
             # merge estimations and save to targets.txt
             elif event.type == pygame.KEYDOWN and event.key == pygame.K_m:
@@ -563,20 +605,23 @@ class Operate:
                 
     def generate_waypoint_list(self, start_point, goal_point, timeout = 100):
         all_obstacles = []
-        for entry in self.apple_gt:
-            all_obstacles.append(CircleT(entry[1], entry[0], self.r_true_apple, 0))
+        for entry in self.object_locations[0]:
+            all_obstacles.append(CircleT(entry[0], entry[1], self.r_true_apple, 0))
 
-        for entry in self.lemon_gt:
-            all_obstacles.append(CircleT(entry[1], entry[0], self.r_true_lemon, 1))
+        for entry in self.object_locations[1]:
+            all_obstacles.append(CircleT(entry[0], entry[1], self.r_true_lemon, 1))
     
-        for entry in self.person_gt:
-            all_obstacles.append(CircleT(entry[1], entry[0], self.r_true_person, 2))
+        for entry in self.object_locations[2]:
+            all_obstacles.append(CircleT(entry[0], entry[1], self.r_true_person, 2))
     
-        for entry in self.aruco_gt:
-            all_obstacles.append(CircleT(entry[1], entry[0], self.r_true_marker, 3))
+        for entry in self.ekf.markers:
+            all_obstacles.append(CircleT(entry[0], entry[1], self.r_true_marker, 3))
                     
+        lemon_not_done = objects_not_done(self.object_locations[0], self.object_locations[1], self.object_locations[2])
+        return generate_fruit_path(0, 0, lemon_not_done, all_obstacles,start_point, 20)
         #rrt = RRT(start=start_point, goal=goal_point, width=1.4, height=1.4, obstacle_list=all_obstacles, expand_dis=0.2, path_resolution=0.04)
         
+        """
         rrt = RRT(start=start_point, goal=goal_point, width=1.4, height=1.4, obstacle_list=all_obstacles, expand_dis=0.4, path_resolution=0.04)
         
         # generate plans and try choose the best one based off-
@@ -601,5 +646,7 @@ class Operate:
         print([len(plan) for plan in plans])
         print(len(optimal_plan))
         return optimal_plan
+        
+        """
             
         
