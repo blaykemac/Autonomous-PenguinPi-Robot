@@ -30,6 +30,8 @@ import slam.aruco_detector as aruco
 sys.path.insert(0,"{}/cv/".format(os.getcwd()))
 from cv.detector import Detector
 from cv.yolo_detector import YOLODetector
+from cv.annotate import Annotate
+from cv.estimate_pose import *
 
 # import the helper functions
 from helper import *
@@ -89,10 +91,17 @@ class Operate:
             self.detector = None
             self.network_vis = cv2.imread('pics/8bit/detector_splash.png')
         else:
-            self.detector = Detector(args.ckpt, use_gpu=False) # DO I NEED TO SET 'USE GPU' TO TRUE IF WE CAN RUN ON MY DESKTOP MACHINE?
-            self.yolo_detector = YOLODetector()
+            self.detector = Detector("model/model.best.pth", use_gpu=False) # DO I NEED TO SET 'USE GPU' TO TRUE IF WE CAN RUN ON MY DESKTOP MACHINE?
+            self.yolo_detector = YOLODetector(args.ckpt)
             self.network_vis = np.ones((240, 320,3))* 100
         self.bg = pygame.image.load('pics/gui_mask.jpg')
+        self.class_names = ["apple", "lemon", "person"]
+        self.object_locations = [[None, None, None], [None, None, None], [None, None, None]] # [[apples_xy], [lemons_xy], [persons_xy]] Initialise as None until we have merged our estimations
+        self.estimation_threshold = 0.865 + 3
+        self.object_locations_premerge = [[], [], []]
+        self.inference_buffer = [[], [], []]
+        self.confidence_threshold = 0.7
+        #self.detections_buffer 
         
         # initialise waypoint
         self.waypoint = np.array([0.0, 0.0])
@@ -203,11 +212,33 @@ class Operate:
     # using computer vision to detect targets
     def detect_target(self):
         if self.command['inference'] and self.detector is not None:
-            self.detector_output, self.network_vis = self.detector.detect_single_image(self.img)
-            self.bounding_box = self.yolo_detector.inference(self.img)
+            
+            detection = self.yolo_detector.infer(self.img)
+            annotate = Annotate(detection.imgs, detection.pred, detection.names)
+            self.network_vis = annotate.get_annotations()
             self.command['inference'] = False
-            self.file_output = (self.detector_output, self.ekf)
-            self.notification = f'{len(np.unique(self.detector_output))-1} target type(s) detected'
+            detections = detection.xywh[0].cpu().numpy() # [[xc, yc, w, h, confidence, class_id], ...., ...]
+            self.inference_buffer = [[], [], []] # reinitialise because we have a new detection to go into buffer
+            
+            for target in detections:
+                class_id = int(target[5])
+                class_name = self.class_names[class_id]
+                box = target[:4]
+                robot_pose = self.ekf.robot.state[:3]
+                target_world = box_to_world(box, robot_pose, class_name, self.camera_matrix[0][0])
+                confidence = target[4]
+                # gonna need to check if self.premerge flag is true ebefore running 
+                distance_from_robot = np.hypot(target_world[0] - self.ekf.robot.state[0], target_world[1] - self.ekf.robot.state[1])
+                #distance_from_robot= np.linalg.norm(target_world - self.ekf.robot.state)
+                #print(distance_from_robot)
+                if distance_from_robot < self.estimation_threshold and confidence > self.confidence_threshold:
+                    self.inference_buffer[class_id].append(target_world)
+                    
+            print("valid")
+            print(self.inference_buffer)
+
+            #self.file_output = (self.detector_output, self.ekf)
+            #self.notification = f'{len(np.unique(self.detector_output))-1} target type(s) detected'
 
     # save raw images taken by the camera
     def save_image(self):
@@ -241,8 +272,19 @@ class Operate:
             self.output.write_map(self.ekf)
             self.notification = 'Map is saved'
             self.command['output'] = False
+            
         # save inference with the matching robot pose and detector labels
-        if self.command['save_inference']:
+        print(f"save infer: {self.command['save_inference']}")
+        print(f"inf buffer: {self.inference_buffer}")
+        #print(f"inf buffer != ")
+        if self.command['save_inference'] and self.inference_buffer != [[], [], []]:
+            for class_index, classes in enumerate(self.inference_buffer):
+                if classes != []:
+                    for detected_object_coordinates in classes:
+                        self.object_locations_premerge[class_index].append(detected_object_coordinates)
+            self.notification = "Accepted detection"
+       
+            """
             if self.file_output is not None:
                 #image = cv2.cvtColor(self.file_output[0], cv2.COLOR_RGB2BGR)
                 self.pred_fname = self.output.write_image(self.file_output[0],
@@ -250,6 +292,7 @@ class Operate:
                 self.notification = f'Prediction is saved to {operate.pred_fname}'
             else:
                 self.notification = f'No prediction in buffer, save ignored'
+                """
             self.command['save_inference'] = False
 
     # paint the GUI            
@@ -415,6 +458,18 @@ class Operate:
             # save object detection outputs
             elif event.type == pygame.KEYDOWN and event.key == pygame.K_n:
                 self.command['save_inference'] = True
+                
+            # merge estimations and save to targets.txt
+            elif event.type == pygame.KEYDOWN and event.key == pygame.K_m:
+                # merge the estimations of the targets so that there are at most 3 estimations of each target type
+                self.target_est_dict, self.object_locations = merge_estimations(self.object_locations_premerge)
+                     
+                # save target pose estimations
+                with open('lab_output/targets.txt', 'w') as fo:
+                    json.dump(self.target_est_dict, fo)
+                    self.notification = "Saved object locations to targets.txt"
+                
+                print('Estimations saved!')
                 
             # quit
             elif event.type == pygame.QUIT:

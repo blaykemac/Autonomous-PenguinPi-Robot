@@ -140,9 +140,20 @@ def merge_estimations(target_pose_dict):
     k_apple = min(len(apple_est), 3)
     k_lemon = min(len(lemon_est), 3)
     k_person = min(len(person_est), 3)
-    
+    merge_threshold = 0.2 # metres
+    dup_indices = []
+    """
+    for i, apple in enumerate(apple_est):
+        for j, other_apple in enumerate(apple_est):
+            if i == j:
+                continue
+            else:
+                radius = np.hypot(apple[0] - other_apple[0] , apple[1] - other_apple[1])
+                if radius < merge_threshold:
+                    dup_indices.append(j)
+    """
     epsilon = 1E-3
-    k = 3
+    #k = 3
     attempts = 10
     criteria = (cv2.TERM_CRITERIA_MAX_ITER, 20, epsilon)
     
