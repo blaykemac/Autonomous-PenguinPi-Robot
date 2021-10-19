@@ -3,6 +3,8 @@ import math
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 from matplotlib.lines import Line2D
+import random
+
 
 ###### OLD MATH FUNCTIONS ######
 def compute_distance_between_points(p1, p2):
@@ -629,9 +631,304 @@ class RRT:
         theta = math.atan2(dy, dx)
         return d, theta        
     
-    
+# MY FUNCTIONS
+
 
 class CircleT(Circle):
     def __init__(self, c_x, c_y, radius, tag):
         Circle.__init__(self, c_x, c_y, radius)
         self.tag = tag
+        
+
+
+def ignore_obs(obs_list, ignore):
+    obs_cpy = obs_list[:]
+    for i, obs in enumerate(obs_list):
+        if all(obs.center == ignore[0:2]):
+            obs_cpy.remove(obs)
+    return obs_cpy
+
+
+
+def collision_between_points(p1, p2, obs_list, radius, samples=50):
+    x_vals = np.linspace(p1[0], p2[0], samples)
+    y_vals = np.linspace(p1[1], p2[1], samples)
+    
+    points = np.column_stack((x_vals, y_vals))
+
+    collision = False
+    for obs in obs_list:
+        for point in points:
+            if np.linalg.norm(point - obs.center) < (obs.radius + radius):
+                collision = True
+
+    
+    return collision
+
+
+def move_apple_to_person(apple, person):
+    return [(apple[2], apple[1]), (person[2], person[1])]
+
+
+def find_collinear_behind(B, A, offset):
+    
+    if np.all(np.isclose(B, A)):
+        raise ValueError
+    
+    AB = B - A
+    # find k s.t. k * abs(AB) = abs(AB) + offset
+    abs_AB = np.linalg.norm(AB)
+
+    k = (abs_AB + offset)/abs_AB
+
+    BA = A-B
+    
+    k_BA = k*BA
+    
+    return B + k_BA
+
+
+def push_bad_lemon_away(lemon, obs, robot_collinear_space = 0.1):
+    # need to determine a path that:
+    # - has a straight path with no obstacles
+    
+    # generate a bunch of potential straight line paths 
+    
+    # need a path thats wide enough for 4cm radius lemon
+    pushed_lemon_r = 0.1
+    
+    potential_traj = []
+    for angle in np.linspace(0, 2*np.pi, 30):
+        new_point = 3*np.array([np.cos(angle), np.sin(angle)])
+        if not collision_between_points(lemon[0:2], new_point, ignore_obs(obs, lemon), pushed_lemon_r):
+            potential_traj.append(new_point)
+    
+    # - can be pathed in behind
+    #print(f"{np.array(potential_traj)}")
+    successful = []
+    bad = False
+    # go some distance behind the lemon while collinear with the goal point, check if this collides anywhere
+    for candidate in potential_traj:
+        potential_point = find_collinear_behind(candidate, lemon[0:2], 0.2)
+        bad = False
+        for ob in ignore_obs(obs, lemon):
+            if np.linalg.norm(ob.center - potential_point) < robot_collinear_space + ob.radius:
+                bad = True
+                break
+        if not bad:
+            successful.append(potential_point)
+    
+    #print(f"{np.array(successful)}")
+    
+    if len(successful) == 0:
+        raise ValueError("failed to push lemon ", lemon[2])
+    
+    return successful
+
+
+def compute_seq_length(seq):
+    total_len = 0
+    for i in range(len(seq)-1):
+        total_len += (np.linalg.norm(seq[i]-seq[i+1]))
+    return total_len
+
+
+
+def push_lemon_x(A, B, dist):
+    
+    AB = B - A
+    # find k s.t. k * abs(AB) = abs(AB) + dis
+    abs_AB = np.linalg.norm(AB)
+
+    k = (abs_AB + dist)/abs_AB
+    
+    k_AB = k*AB
+    
+    return A + k_AB
+
+
+
+def animate_path_x(x, xlim1, ylim1, obs_list):
+    path = x
+    
+    fig = plt.figure(figsize=(8, 6))
+    ax = fig.add_subplot(111, aspect='equal', autoscale_on=False,
+                         xlim=xlim1, ylim=ylim1)
+    ax.grid()
+
+    ax.plot(x[0,0],x[0,1], "^r", lw=5)
+    ax.plot(x[-1,0],x[-1,1], "^c", lw=5)
+
+    obs_colour = ["r", "y", "k", "b"]
+    
+    for obs in obs_list:
+        cx, cy = obs.center
+        plot_circle(ax, cx, cy, obs.radius, color = obs_colour[obs.tag])
+            
+    for point in x:
+        ax.plot(x[:,0], x[:,1])
+
+
+
+def generate_object_circle_lists(object_array, aruco_markers):
+    apple_gt, lemon_gt, person_gt, marker_gt = [], [], [], []
+
+    map1 = [apple_gt, lemon_gt, person_gt]
+    for i in range(len(object_array)):
+        for j in range len(object_array[i]):
+            map1[i].append([object_array[i][0], object_array[i][1], j])
+    
+    r_true_apple = 0.075
+    r_true_lemon = 0.06
+    r_true_person = 0.19
+    r_true_marker = 0.1
+
+    scale = 0.08
+
+    r_true_apple += scale
+    r_true_lemon += scale
+    r_true_person += scale
+    r_true_marker += scale
+
+    all_obstacles = []
+    for entry in apple_gt:
+        all_obstacles.append(CircleT(entry[0], entry[1], r_true_apple, 0))
+
+    for entry in lemon_gt:
+        all_obstacles.append(CircleT(entry[0], entry[1], r_true_lemon, 1))
+
+    for entry in person_gt:
+        all_obstacles.append(CircleT(entry[0], entry[1], r_true_person, 2))
+
+    for entry in marker_gt:
+        all_obstacles.append(CircleT(entry[0], entry[1], r_true_marker, 3))
+
+    return all_obstacles, apple_gt, lemon_gt, person_gt, marker_gt
+
+
+
+def objects_not_done(apple_gt, lemon_gt, person_gt):
+    goal_thresh = 0.6
+    
+    
+    ## FIX LATER
+    for person_idx, person in enumerate(person_gt):
+        for apple_idx, apple in enumerate(apple_gt):
+            if apple in apples_done:
+                continue
+            elif np.linalg.norm(apple[0:2] - person[0:2]) < goal_thresh:
+                #if this is the case, an apple is within range of a person, including some consideration of error
+                apples_done.append(apple)
+                people_done.append(person)
+                
+    people_not_done = [n for n in person_gt if n[0] not in people_done]
+    apples_not_done = [n for n in apple_gt if n[0] not in apples_done]
+
+    lemons_not_done = []
+    for lemon in lemon_gt:
+        for person in person_gt:
+            if np.linalg.norm(person[0:2] - lemon[0:2]) < goal_thresh:
+                lemons_not_done.append(lemon)
+                break
+                
+    return apples_not_done, lemons_not_done, people_not_done
+
+
+
+def generate_fruit_path(unpaired_apple_input, unpaired_person_input, bad_lemon_input, all_obstacles, initial_point, iterations):
+    
+    # initial conditions
+    best_sol = ([], np.inf)
+    
+    iterations = 20
+    for i in range(iterations):
+        # try a path combination
+        #unpaired_apple = [] # list of apples not yet paired
+        #unpaired_person = [] # list of people without apple
+        bad_lemon = bad_lemon.copy() # list of lemons requiring moving
+
+        #done_apple = False
+        done_lemon = False
+        # build path that pairs people with apples, removes lemons, compute total distance
+
+        seq = []
+        seq.append(initial_point)
+
+        while True:
+            # move apple to person or move lemon away
+            #flag = np.random.randint(0,2)
+            seq_int = []
+     #       print("here")
+            #if flag and not done_apple:
+            #    if not len(unpaired_person) or not len(unpaired_apple):
+            #        done_apple = True
+            #    else:
+            #        # move apple to person
+            #        random.shuffle(unpaired_person)
+            #        unpaired_person.pop()
+            #    
+            #        random.shuffle(unpaired_apple)
+            #        unpaired_apple.pop()
+
+                    # random apple and person, move apple to person
+
+            #        seq_int = move_apple_to_person()
+
+            if not done_lemon:
+                # move random lemon away
+
+                if not len(bad_lemon):
+                    done_lemon = True
+                else:
+                    random.shuffle(bad_lemon)
+                    the_lemon = bad_lemon.pop()
+
+                    potential_lemon_push_pos = random.choice(push_bad_lemon_away(the_lemon, all_obstacles)) # just take first one for now
+
+     #               print(potential_lemon_push_pos)
+                    ## RRT to lemon, push straight
+    #                print("seq", np.array(seq[-1]))
+
+                    rrt_path = None
+
+                    rrt_res = RRT(
+                        start=seq[-1],
+                        goal=potential_lemon_push_pos, 
+                        width=1.4, height=1.4, 
+                        obstacle_list=all_obstacles, 
+                        expand_dis=0.2, path_resolution=0.04,
+                        max_points=50
+                    )
+
+                    while rrt_path is None:
+                        rrt_path = rrt_res.planning()
+
+    #                print("aaa")
+
+                    rrt_path.reverse()
+
+                    # just push it 0.5m for now
+                    #print(to_lemon[-1], the_lemon)
+
+                    dest = push_lemon_x(rrt_path[-1], the_lemon[0:2], 0.5)
+
+
+                    seq_int = rrt_path + [dest]
+
+            #print(done_apple, done_lemon)
+
+            if done_lemon: #and done_lemon:
+                break
+            else:
+                seq += seq_int
+                #print(np.array(seq))
+
+        # done a sequence, compute sequence length
+
+        length = compute_seq_length(seq)
+    #    print(length)
+
+        if length < best_sol[1]:
+            best_sol = (seq, length)
+
+    return np.array(best_sol[0])
