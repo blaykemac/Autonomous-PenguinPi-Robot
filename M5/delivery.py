@@ -20,44 +20,44 @@ if __name__ == "__main__":
     parser.add_argument("--ckpt", default='weights/best.pt') # specifies nn model path
     parser.add_argument("--nogui", action='store_true') # disables semiauto GUI
     parser.add_argument("--auto", action='store_true') # enable full auto delivery
+    parser.add_argument("--load_slam_cv", action='store_true') # load map and object locations
+    parser.add_argument("--load_slam", action="store_true")
   
     args, _ = parser.parse_known_args()
 
     # Initialise the main robot controller
     operator = operate.Operate(args)
-    
-    #try:
-    if True: ##### TEMP
-        # main control loop where we run all necessary functions in class Operate()
-        while True:
-            # check for any events such as keyboard or mouse presses
-            operator.update_input()
-            
-            # run full auto waypoint creator
-            operator.automate_waypoint()
-            
-            # take image from camera
-            operator.take_pic()
-            
-            # navigate to waypoint
-            operator.navigate_to_waypoint()
-            
-            # generate drive signal from the 
-            drive_meas = operator.control()
-            
-            # run predict and update step of SLAM given the drive signal generated previously
-            operator.update_slam(drive_meas)
-            
-            # save slam map, detected objects and raw camera image
-            operator.record_data()
-            operator.save_image()
-            
-            # perform object segmentation
-            operator.detect_target()
-            
-            # visualise
-            operator.draw()
-            pygame.display.update()
+
+    # main control loop where we run all necessary functions in class Operate()
+    while True:
+        # check for any events such as keyboard or mouse presses
+        operator.update_input()
+        
+        # run full auto waypoint creator
+        operator.automate_waypoint()
+        
+        # take image from camera
+        operator.take_pic()
+        
+        # navigate to waypoint
+        operator.navigate_to_waypoint()
+        
+        # generate drive signal from the 
+        drive_meas = operator.control()
+        
+        # run predict and update step of SLAM given the drive signal generated previously
+        operator.update_slam(drive_meas)
+        
+        # save slam map, detected objects and raw camera image
+        operator.record_data()
+        operator.save_image()
+        
+        # perform object segmentation
+        operator.detect_target()
+        
+        # visualise
+        operator.draw()
+        pygame.display.update()
             
     """
     except Exception as exc:

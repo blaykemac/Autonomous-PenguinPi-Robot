@@ -66,6 +66,7 @@ class Operate:
         else:
             self.data = None
         self.output = dh.OutputWriter('lab_output')
+        
         self.command = {'motion':[0, 0], 
                         'inference': False,
                         'output': False,
@@ -96,15 +97,35 @@ class Operate:
             self.network_vis = np.ones((240, 320,3))* 100
         self.bg = pygame.image.load('pics/gui_mask.jpg')
         self.class_names = ["apple", "lemon", "person"]
-        self.object_locations = [[None, None, None], [None, None, None], [None, None, None]] # [[apples_xy], [lemons_xy], [persons_xy]] Initialise as None until we have merged our estimations
-        self.estimation_threshold = 0.865 + 3
+        
+        if args.load_slam_cv or args.load_slam:
+            self.slam_map_loader = dh.InputReader("lab_output")
+            self.loaded_taglist, self.loaded_markers, self.loaded_P = self.slam_map_loader.read_slam()
+            self.ekf.markers = self.loaded_markers
+            self.ekf.taglist = self.loaded_taglist
+            
+            temp_P = np.zeros((23,23)) # assume we have all 10 markers in slam.txt
+            temp_P[:3, :3] = self.ekf.P[:3, :3] 
+            temp_P[3:, 3:] = self.loaded_P
+            self.ekf.P = temp_P
+            
+        # then we must also add cv map
+        if args.load_slam_cv:
+            pass
+            #self.loaded_taglist, self.loaded_markers, self.loaded_P = self.slam_map_loader.read_slam()
+
+        else:
+            self.object_locations = [[None, None, None], [None, None, None], [None, None, None]] # [[apples_xy], [lemons_xy], [persons_xy]] Initialise as None until we have merged our estimations
+
+        self.estimation_threshold = 1
         self.object_locations_premerge = [[], [], []]
         self.inference_buffer = [[], [], []]
         self.confidence_threshold = 0.7
+        self.auto_waypoint_enabled = False
         #self.detections_buffer 
         
         # initialise waypoint
-        self.waypoint = np.array([0.0, 0.0])
+        self.waypoint = None #np.array([0.0, 0.0])
         self.finished_navigating = True # we start off at the waypoint
         self.turning = True
         self.keyboard_overridden = False
@@ -120,7 +141,7 @@ class Operate:
         self.r_true_lemon = 0.06
         self.r_true_person = 0.19
         self.r_true_marker = 0.1
-        self.obstacle_padding = 0.06 * 0
+        self.obstacle_padding = 0.05 * -1
         self.r_true_apple += self.obstacle_padding
         self.r_true_lemon += self.obstacle_padding
         self.r_true_person += self.obstacle_padding
@@ -214,31 +235,39 @@ class Operate:
         if self.command['inference'] and self.detector is not None:
             
             detection = self.yolo_detector.infer(self.img)
-            annotate = Annotate(detection.imgs, detection.pred, detection.names)
-            self.network_vis = annotate.get_annotations()
             self.command['inference'] = False
             detections = detection.xywh[0].cpu().numpy() # [[xc, yc, w, h, confidence, class_id], ...., ...]
             self.inference_buffer = [[], [], []] # reinitialise because we have a new detection to go into buffer
+            colour_mask = [0] * len(detections) # 1 if we ar e keeping detection
+            print(detections)
+            print(len(detections))
             
-            for target in detections:
+            for target_index, target in enumerate(detections):
                 class_id = int(target[5])
                 class_name = self.class_names[class_id]
                 box = target[:4]
                 robot_pose = self.ekf.robot.state[:3]
                 target_world = box_to_world(box, robot_pose, class_name, self.camera_matrix[0][0])
                 confidence = target[4]
+                print(f"target_world: {target_world}")
                 # gonna need to check if self.premerge flag is true ebefore running 
                 distance_from_robot = np.hypot(target_world[0] - self.ekf.robot.state[0], target_world[1] - self.ekf.robot.state[1])
-                #distance_from_robot= np.linalg.norm(target_world - self.ekf.robot.state)
-                #print(distance_from_robot)
                 if distance_from_robot < self.estimation_threshold and confidence > self.confidence_threshold:
+                    print("valid")
+                    print(f"index, cls {target_index}, {class_id}")
+                    print(f"dist: {distance_from_robot}")
                     self.inference_buffer[class_id].append(target_world)
+                    colour_mask[target_index] = 1
                     
-            print("valid")
-            print(self.inference_buffer)
-
-            #self.file_output = (self.detector_output, self.ekf)
-            #self.notification = f'{len(np.unique(self.detector_output))-1} target type(s) detected'
+                else:
+                    print("invalid")
+                    print(f"index, cls {target_index}, {class_id}")
+                    print(f"dist: {distance_from_robot}")
+                    
+            print(f"mask: {colour_mask}")
+            
+            annotate = Annotate(detection.imgs, detection.pred, detection.names, colour_mask)
+            self.network_vis = annotate.get_annotations()
 
     # save raw images taken by the camera
     def save_image(self):
@@ -274,8 +303,8 @@ class Operate:
             self.command['output'] = False
             
         # save inference with the matching robot pose and detector labels
-        print(f"save infer: {self.command['save_inference']}")
-        print(f"inf buffer: {self.inference_buffer}")
+        #print(f"save infer: {self.command['save_inference']}")
+        #print(f"inf buffer: {self.inference_buffer}")
         #print(f"inf buffer != ")
         if self.command['save_inference'] and self.inference_buffer != [[], [], []]:
             for class_index, classes in enumerate(self.inference_buffer):
@@ -488,14 +517,19 @@ class Operate:
             # save object detection outputs
             elif event.type == pygame.KEYDOWN and event.key == pygame.K_a:
                 self.auto_waypoint_enabled = True
+                #self.finished_navigating = False
+                self.turning = True
                 
                 start_point = np.array([self.ekf.robot.state[0][0], self.ekf.robot.state[1][0]])
                 finish_point = np.array([0,0]) # set to this because finish point overwwritten byrrt anyway
                 # this list returns the sequence of waypoints from finish to start (so its in reverse order), including the robot initial position
                 self.auto_waypoint_list = self.generate_waypoint_list(start_point, finish_point)
                 
+                self.auto_waypoint_list.reverse()
+                                
                 # we remove the last element of the list, because generate_waypoint_list 
                 # includes the starting position of the robot, which we are already located at
+                print(f"wayppoits: {self.auto_waypoint_list}")
                 if len(self.auto_waypoint_list) > 0:
                     self.auto_waypoint_list.pop()
                 else:
@@ -555,9 +589,9 @@ class Operate:
                     self.finished_navigating = False
                     self.turning = True
                     
-            if self.keyboard_overridden:
-                self.finished_navigating = True
-                self.turning = True
+            #if self.keyboard_overridden:
+                #self.finished_navigating = True
+                #self.turning = True
                 
         if self.quit:
             pygame.quit()
@@ -598,9 +632,13 @@ class Operate:
         #if self.args.auto and self.finished_navigating and self.gui_clicked:
         if self.args.auto and self.finished_navigating and len(self.auto_waypoint_list) > 0:
             self.waypoint = self.auto_waypoint_list.pop()
+            print(f"new waypoint set: {self.waypoint}")
             self.turning = True
             self.finished_navigating = False
             self.gui_clicked = False
+            pass
+        elif len(self.auto_waypoint_list) == 0:
+            self.finished_navigating = True
             pass
                 
     def generate_waypoint_list(self, start_point, goal_point, timeout = 100):
@@ -618,8 +656,13 @@ class Operate:
             all_obstacles.append(CircleT(entry[0], entry[1], self.r_true_marker, 3))
                     
         lemon_not_done = objects_not_done(self.object_locations[0], self.object_locations[1], self.object_locations[2])
-        print(f"lemon not done: {lemon_not_done}")
-        return generate_fruit_path(0, 0, lemon_not_done, all_obstacles,start_point, 20)
+        #print(f"lemon not done: {lemon_not_done}")
+        
+        waypoints = generate_fruit_path(0, 0, lemon_not_done, all_obstacles,start_point, 20)
+        animate_path_x(np.array(waypoints), (-1.5, 1.5), (-1.5, 1.5), all_obstacles)
+        
+        
+        return waypoints
         #rrt = RRT(start=start_point, goal=goal_point, width=1.4, height=1.4, obstacle_list=all_obstacles, expand_dis=0.2, path_resolution=0.04)
         
         """

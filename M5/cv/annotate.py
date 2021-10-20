@@ -11,29 +11,26 @@ parent_path = path.parent.absolute()
 #sys.path.append(parent_path)
 sys.path.append("cv/yolov5/")
 
-print(f"parent: {parent_path}")
-
 # only import after adding path 
 from yolov5.utils.plots import Annotator, colors
 from PIL import Image, ImageDraw, ImageFont
 import cv2
 
-
-
-
 class Annotate:
-    def __init__(self, imgs, pred, names):
+    def __init__(self, imgs, pred, names, mask):
         self.imgs = imgs
         self.pred = pred
         self.names = names
         self.annotator = None
+        self.mask = mask
+        self.mask.reverse() # reverse to match this code for loop
         
         for i, (im, pred) in enumerate(zip(self.imgs, self.pred)):
             if pred.shape[0]:
                 self.annotator = Annotator(im, example=str(self.names))
-                for *box, conf, cls in reversed(pred):  # xyxy, confidence, class
+                for detection_index, (*box, conf, cls) in enumerate(reversed(pred)):  # xyxy, confidence, class
                     label = f'{self.names[int(cls)]} {conf:.2f}'
-                    self.annotator.box_label(box, label, color=colors(cls))
+                    self.annotator.box_label(box, label, color=colors(14 if not self.mask[detection_index] else cls))
 
     def get_annotations(self):
         if self.annotator is not None:
