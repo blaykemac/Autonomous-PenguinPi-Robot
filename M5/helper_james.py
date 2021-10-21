@@ -855,7 +855,7 @@ def generate_fruit_path(unpaired_apple_input, unpaired_person_input, bad_lemon_i
         # string to log action taken on pathing
         log = ""
         
-        log += "Attempting to generate path for apples:\n{}\nlemons:\n{}\npeople:\n{}\n".format(unpaired_apple_input, unpaired_person_input, bad_lemon_input)
+        log += "Attempting to generate path for apples:\n{}\nlemons:\n{}\npeople:\n{}\n".format(unpaired_apple_input, bad_lemon_input, unpaired_person_input)
 
         #done_apple = False
         done_lemon = False
