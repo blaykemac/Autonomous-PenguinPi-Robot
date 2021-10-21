@@ -148,14 +148,14 @@ class Operate:
         self.K_pw = 1
         self.angle_tolerance = 0.02 #rads, 0.1 rads ~ 5 degrees
         self.K_pv = 1
-        self.dist_tolerance = 0.1 #metres
+        self.dist_tolerance = 0.01 #metres
         
         # initialise rrt parameters
         self.r_true_apple = 0.075
         self.r_true_lemon = 0.06
         self.r_true_person = 0.19
         self.r_true_marker = 0.1
-        self.obstacle_padding = 0.05 * -1
+        self.obstacle_padding = 0.08
         self.r_true_apple += self.obstacle_padding
         self.r_true_lemon += self.obstacle_padding
         self.r_true_person += self.obstacle_padding
@@ -255,6 +255,7 @@ class Operate:
             colour_mask = [0] * len(detections) # 1 if we ar e keeping detection
             print(detections)
             print(len(detections))
+            detection_coordinates = []
             
             for target_index, target in enumerate(detections):
                 class_id = int(target[5])
@@ -272,6 +273,7 @@ class Operate:
                     print(f"dist: {distance_from_robot}")
                     self.inference_buffer[class_id].append(target_world)
                     colour_mask[target_index] = 1
+                    detection_coordinates.append(target_world)
                     
                 else:
                     print("invalid")
@@ -280,7 +282,7 @@ class Operate:
                     
             print(f"mask: {colour_mask}")
             
-            annotate = Annotate(detection.imgs, detection.pred, detection.names, colour_mask)
+            annotate = Annotate(detection.imgs, detection.pred, detection.names, colour_mask, detection_coordinates)
             self.network_vis = annotate.get_annotations()
 
     # save raw images taken by the camera
@@ -625,7 +627,9 @@ class Operate:
             
         elif self.state == self.states["navigation_forward"]:
             error_dist = get_distance_robot_to_goal(self.waypoint, self.ekf.robot.state)
-            if abs(error_dist) < abs(self.prev_distance_error): 
+            #if abs(error_dist) < abs(self.prev_distance_error):
+            if abs(error_dist) > abs(self.dist_tolerance) and abs(error_dist) < abs(self.prev_distance_error):
+            
                 self.prev_distance_error = error_dist
                 control_omega = 0 # only driving straight
                 control_v, _ = PControllerV(self.waypoint, self.ekf.robot.state, self.K_pv)
@@ -659,15 +663,19 @@ class Operate:
         for entry in self.object_locations[2]:
             all_obstacles.append(CircleT(entry[0], entry[1], self.r_true_person, 2))
     
-        for entry in self.ekf.markers:
-            all_obstacles.append(CircleT(entry[0], entry[1], self.r_true_marker, 3))
+        for i in range(int(self.ekf.markers.size/2)):
+            all_obstacles.append(CircleT(self.ekf.markers[0, i], self.ekf.markers[1, i], self.r_true_marker, 3))
                     
 
         lemon_not_done = objects_not_done(self.object_locations[0], self.object_locations[1], self.object_locations[2])
         print("Objects not done")
         print(f"Lemons- {lemon_not_done}")
         
+        # TEMP
+        lemon_not_done = list(self.object_locations[1])
+        
         waypoints, pathlength, log = generate_fruit_path(0, 0, lemon_not_done, all_obstacles,start_point, 20)
+
         print("Waypoints generated")
         print(log)
         animate_path_x(np.array(waypoints), (-1.5, 1.5), (-1.5, 1.5), all_obstacles)

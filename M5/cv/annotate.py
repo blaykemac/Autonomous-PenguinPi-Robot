@@ -17,19 +17,23 @@ from PIL import Image, ImageDraw, ImageFont
 import cv2
 
 class Annotate:
-    def __init__(self, imgs, pred, names, mask):
+    def __init__(self, imgs, pred, names, mask, coordinates):
         self.imgs = imgs
         self.pred = pred
         self.names = names
         self.annotator = None
         self.mask = mask
         self.mask.reverse() # reverse to match this code for loop
+        self.coordinates = coordinates
         
         for i, (im, pred) in enumerate(zip(self.imgs, self.pred)):
             if pred.shape[0]:
                 self.annotator = Annotator(im, example=str(self.names))
                 for detection_index, (*box, conf, cls) in enumerate(reversed(pred)):  # xyxy, confidence, class
-                    label = f'{self.names[int(cls)]} {conf:.2f}'
+                    if self.coordinates == []:
+                        label = f'{self.names[int(cls)]} {conf:.2f}'
+                    else:
+                        label = f'{self.names[int(cls)]} {conf:.2f} x:{self.coordinates[detection_index][0]:.2f}, y: {self.coordinates[detection_index][1]:.2f}'
                     self.annotator.box_label(box, label, color=colors(14 if not self.mask[detection_index] else cls))
 
     def get_annotations(self):
