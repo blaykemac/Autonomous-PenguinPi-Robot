@@ -34,14 +34,11 @@ if __name__ == "__main__":
         operator.update_input()
         
         # run full auto waypoint creator
-        operator.automate_waypoint()
+        operator.state_transition()
         
         # take image from camera
         operator.take_pic()
-        
-        # navigate to waypoint
-        operator.navigate_to_waypoint()
-        
+
         # generate drive signal from the 
         drive_meas = operator.control()
         
