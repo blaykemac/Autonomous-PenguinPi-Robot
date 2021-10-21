@@ -248,10 +248,10 @@ class EKF:
             if lm.tag in self.taglist:
                 # ignore known tags
                 continue
-            
-            offset = np.zeros((2,1))
-            offset[0] = -0.08
-            lm_bff = lm.position #+ offset
+            elif int(lm.tag) not in list(range(1, 11)):
+                continue
+
+            lm_bff = lm.position
             lm_inertial = robot_xy + R_theta @ lm_bff
             
             self.taglist.append(int(lm.tag))

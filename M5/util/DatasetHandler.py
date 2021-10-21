@@ -133,7 +133,57 @@ class OutputWriter:
         self.img_f.flush()
         cv2.imwrite(img_fname, image)
         return f'pred_{self.image_count}.png'
+        
 
+class InputReader:
+    def __init__(self, folder_name="output/"):
+        if not folder_name.endswith("/"):
+            folder_name = folder_name + "/"
+        self.folder = folder_name
+        if not os.path.exists(self.folder):
+            os.makedirs(self.folder)
+        
+        self.target_f = open(folder_name+"targets.txt", 'r')   
+        self.map_f = folder_name+"slam.txt"
+
+        self.image_count = 0
+        
+    # def __del__(self):
+    #     self.img_f.close()
+    #     self.map_f.close()
+    
+    def read_slam(self):
+        #map_dict = {"taglist":slam.taglist,
+                    #"map":slam.markers.tolist(),
+                    #"covariance":slam.P[3:,3:].tolist()}
+        with open(self.map_f, 'r') as map_f:
+            self.slam_dict = json.load(map_f)        
+        return self.slam_dict_to_np()
+        
+    def read_objects(self):
+        with open(self.target_f, 'r') as target_f:
+            self.target_dict = json.load(target_f)
+            
+            
+    def read_targets(self,):
+        img_fname = "{}pred_{}.png".format(self.folder, self.image_count)
+        self.image_count += 1
+        img_dict = {"pose":slam.robot.state.tolist(),
+                    "imgfname":img_fname}
+        img_line = json.dumps(img_dict)
+        self.img_f.write(img_line+'\n')
+        self.img_f.flush()
+        cv2.imwrite(img_fname, image)
+        return f'pred_{self.image_count}.png'
+        
+    def slam_dict_to_np(self):
+        taglist = self.slam_dict["taglist"]
+        map_np = np.array(self.slam_dict["map"])
+        P_np = np.array(self.slam_dict["covariance"])
+        
+        return taglist, map_np, P_np
+        
+        
 
 if __name__ == '__main__':
     # For testing

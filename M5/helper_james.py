@@ -689,14 +689,14 @@ def find_collinear_behind(B, A, offset):
     return B + k_BA
 
 
-def push_bad_lemon_away(lemon, obs, robot_collinear_space = 0.1):
+def push_bad_lemon_away(lemon, obs, robot_collinear_space = 0.05):
     # need to determine a path that:
     # - has a straight path with no obstacles
     
     # generate a bunch of potential straight line paths 
     
     # need a path thats wide enough for 4cm radius lemon
-    pushed_lemon_r = 0.1
+    pushed_lemon_r = 0.05
     
     potential_traj = []
     for angle in np.linspace(0, 2*np.pi, 30):
@@ -718,11 +718,12 @@ def push_bad_lemon_away(lemon, obs, robot_collinear_space = 0.1):
                 break
         if not bad:
             successful.append(potential_point)
-    
-    #print(f"{np.array(successful)}")
+    print(f"potenital traj: {potential_traj}")
+    print(f"successful: {np.array(successful)}")
     
     if len(successful) == 0:
-        raise ValueError("failed to push lemon ", lemon[2])
+        return None
+        #raise ValueError("failed to push lemon ", lemon[2])
     
     return successful
 
@@ -884,8 +885,10 @@ def generate_fruit_path(unpaired_apple_input, unpaired_person_input, bad_lemon_i
                 else:
                     random.shuffle(bad_lemon)
                     the_lemon = bad_lemon.pop()
-
-                    potential_lemon_push_pos = random.choice(push_bad_lemon_away(the_lemon, all_obstacles)) # just take first one for now
+                    bad_lemon_choice = push_bad_lemon_away(the_lemon, all_obstacles)
+                    if bad_lemon_choice is None:
+                        continue
+                    potential_lemon_push_pos = random.choice(bad_lemon_choice) # just take first one for now
 
      #               print(potential_lemon_push_pos)
                     ## RRT to lemon, push straight
@@ -933,4 +936,4 @@ def generate_fruit_path(unpaired_apple_input, unpaired_person_input, bad_lemon_i
         if length < best_sol[1]:
             best_sol = (seq, length)
 
-    return np.array(best_sol[0])
+    return best_sol[0]
