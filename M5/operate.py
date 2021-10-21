@@ -668,8 +668,8 @@ class Operate:
         
         waypoints = generate_fruit_path(0, 0, lemon_not_done, all_obstacles,start_point, 20)
         print("Waypoints generated")
-        animate_path_x(np.array(waypoints), (-1.5, 1.5), (-1.5, 1.5), all_obstacles)
-        plt.show()
+        #animate_path_x(np.array(waypoints), (-1.5, 1.5), (-1.5, 1.5), all_obstacles)
+        #plt.show()
         
         
         
