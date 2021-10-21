@@ -36,6 +36,7 @@ from cv.estimate_pose import *
 # import the helper functions
 from helper import *
 from helper_james import *
+import matplotlib.pyplot as plt
 
 class Operate:
     def __init__(self, args):
@@ -111,11 +112,14 @@ class Operate:
             
         # then we must also add cv map
         if args.load_slam_cv:
-            pass
-            #self.loaded_taglist, self.loaded_markers, self.loaded_P = self.slam_map_loader.read_slam()
+            self.objects_loader = dh.InputReader("lab_output")
+            self.object_locations =  self.objects_loader.read_objects()
 
         else:
             self.object_locations = [[None, None, None], [None, None, None], [None, None, None]] # [[apples_xy], [lemons_xy], [persons_xy]] Initialise as None until we have merged our estimations
+
+        #DELETE LATER
+        print(self.object_locations)
 
         self.estimation_threshold = 1
         self.object_locations_premerge = [[], [], []]
@@ -570,7 +574,9 @@ class Operate:
                     self.keyboard_overridden = False
                     self.finished_navigating = False
                     self.turning = True
-                
+                    
+                    print("Automated Waypoint Delivery Beginning")
+                    
                     # this list returns the sequence of waypoints from finish to start (so its in reverse order), including the robot initial position
                     self.auto_waypoint_list = self.generate_waypoint_list(start_point, finish_point)
                     
@@ -655,11 +661,16 @@ class Operate:
         for entry in self.ekf.markers:
             all_obstacles.append(CircleT(entry[0], entry[1], self.r_true_marker, 3))
                     
+
         lemon_not_done = objects_not_done(self.object_locations[0], self.object_locations[1], self.object_locations[2])
-        #print(f"lemon not done: {lemon_not_done}")
+        print("Objects not done")
+        print(f"Lemons- {lemon_not_done}")
         
         waypoints = generate_fruit_path(0, 0, lemon_not_done, all_obstacles,start_point, 20)
+        print("Waypoints generated")
         animate_path_x(np.array(waypoints), (-1.5, 1.5), (-1.5, 1.5), all_obstacles)
+        plt.show()
+        
         
         
         return waypoints
