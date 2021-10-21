@@ -644,7 +644,7 @@ class CircleT(Circle):
 def ignore_obs(obs_list, ignore):
     obs_cpy = obs_list[:]
     for i, obs in enumerate(obs_list):
-        print(obs.center, ignore[0:2])
+        #print(obs.center, ignore[0:2])
         if all(obs.center == ignore[0:2]):
             obs_cpy.remove(obs)
     return obs_cpy
@@ -718,8 +718,8 @@ def push_bad_lemon_away(lemon, obs, robot_collinear_space = 0.05):
                 break
         if not bad:
             successful.append(potential_point)
-    print(f"potenital traj: {potential_traj}")
-    print(f"successful: {np.array(successful)}")
+    #print(f"potenital traj: {potential_traj}")
+    #print(f"successful: {np.array(successful)}")
     
     if len(successful) == 0:
         return None
@@ -890,35 +890,52 @@ def generate_fruit_path(unpaired_apple_input, unpaired_person_input, bad_lemon_i
                         continue
                     potential_lemon_push_pos = random.choice(bad_lemon_choice) # just take first one for now
 
-     #               print(potential_lemon_push_pos)
+                    #print(potential_lemon_push_pos)
                     ## RRT to lemon, push straight
-    #                print("seq", np.array(seq[-1]))
+                    #print("seq", np.array(seq[-1]))
 
-                    rrt_path = None
+                    #attempt straightline path
+                    
+                    
+                    
+                    if not collision_between_points(seq[-1], potential_lemon_push_pos, all_obstacles, radius=0):
+                        path = [potential_lemon_push_pos]
+                        
+                    else:
+                        rrt_path = None
 
-                    rrt_res = RRT(
-                        start=seq[-1],
-                        goal=potential_lemon_push_pos, 
-                        width=1.4, height=1.4, 
-                        obstacle_list=all_obstacles, 
-                        expand_dis=0.2, path_resolution=0.04,
-                        max_points=50
-                    )
+                        rrt_res = RRT(
+                            start=seq[-1],
+                            goal=potential_lemon_push_pos, 
+                            width=1.4, height=1.4, 
+                            obstacle_list=all_obstacles, 
+                            expand_dis=0.4, path_resolution=0.04,
+                            max_points=100
+                        )
+                        
+                        attempt = 0
+                        
+                        while rrt_path is None and attempt < 20:
+                            rrt_path = rrt_res.planning()
+                            attempt += 1
+                        
+                        if rrt_path is None:
+                            # we made our attempts and none were successful, we should now give up on this lemon
+                            continue
+                         
+                        rrt_path.reverse()
+                        
+                        path = rrt_path
 
-                    while rrt_path is None:
-                        rrt_path = rrt_res.planning()
-
-    #                print("aaa")
-
-                    rrt_path.reverse()
+                    
 
                     # just push it 0.5m for now
                     #print(to_lemon[-1], the_lemon)
 
-                    dest = push_lemon_x(rrt_path[-1], the_lemon[0:2], 0.5)
+                    dest = push_lemon_x(path[-1], the_lemon[0:2], 0.5)
 
 
-                    seq_int = rrt_path + [dest]
+                    seq_int = path + [dest]
 
             #print(done_apple, done_lemon)
 

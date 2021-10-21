@@ -143,7 +143,7 @@ class InputReader:
         if not os.path.exists(self.folder):
             os.makedirs(self.folder)
         
-        self.target_f = open(folder_name+"targets.txt", 'r')   
+        self.target_f = folder_name+"targets.txt"
         self.map_f = folder_name+"slam.txt"
 
         self.image_count = 0
@@ -163,6 +163,7 @@ class InputReader:
     def read_objects(self):
         with open(self.target_f, 'r') as target_f:
             self.target_dict = json.load(target_f)
+        return self.target_dict_to_np()
             
             
     def read_targets(self,):
@@ -183,7 +184,21 @@ class InputReader:
         
         return taglist, map_np, P_np
         
+    def target_dict_to_np(self):
+        ## looks like [[apples_xy], [lemons_xy], [persons_xy]]
+        object_dict = self.target_dict
+        object_array = [[None, None, None], [None, None, None], [None, None, None]]
         
+        index_object_map = ['apple', 'lemon', 'person']
+        
+        for key in object_dict: #iterate over classes
+            key_info = key.split('_')
+            object_id = int(key_info[1])
+            object_str = str(key_info[0])
+            
+            object_array[index_object_map.index(object_str)][object_id] = [object_dict[key]["x"], object_dict[key]["y"]]
+        
+        return np.array(object_array)
 
 if __name__ == '__main__':
     # For testing
