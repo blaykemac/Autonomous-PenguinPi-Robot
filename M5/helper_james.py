@@ -842,13 +842,20 @@ def objects_not_done(apple_gt, lemon_gt, person_gt):
 def generate_fruit_path(unpaired_apple_input, unpaired_person_input, bad_lemon_input, all_obstacles, initial_point, iterations):
     
     # initial conditions
-    best_sol = ([], np.inf)
+    best_sol = ([], np.inf, "")
+    print("beginning fruit path iteration")
     
     for i in range(iterations):
         # try a path combination
         #unpaired_apple = [] # list of apples not yet paired
         #unpaired_person = [] # list of people without apple
         bad_lemon= bad_lemon_input.copy() # list of lemons requiring moving
+        
+        # which objects are visited and in what order
+        # string to log action taken on pathing
+        log = ""
+        
+        log += "Attempting to generate path for apples:\n{}\nlemons:\n{}\npeople:\n{}\n".format(unpaired_apple_input, unpaired_person_input, bad_lemon_input)
 
         #done_apple = False
         done_lemon = False
@@ -886,9 +893,15 @@ def generate_fruit_path(unpaired_apple_input, unpaired_person_input, bad_lemon_i
                     random.shuffle(bad_lemon)
                     the_lemon = bad_lemon.pop()
                     bad_lemon_choice = push_bad_lemon_away(the_lemon, all_obstacles)
+                    
+                    log += "attemting to push lemon at {}, {}.\n".format(the_lemon[0], the_lemon[1])
+                    
                     if bad_lemon_choice is None:
+                        log += "couldnt find a direction to push lemon, aborting\n"
                         continue
                     potential_lemon_push_pos = random.choice(bad_lemon_choice) # just take first one for now
+                    
+                    
 
                     #print(potential_lemon_push_pos)
                     ## RRT to lemon, push straight
@@ -900,6 +913,7 @@ def generate_fruit_path(unpaired_apple_input, unpaired_person_input, bad_lemon_i
                     
                     if not collision_between_points(seq[-1], potential_lemon_push_pos, all_obstacles, radius=0):
                         path = [potential_lemon_push_pos]
+                        log += "found a straightline path to the lemon!\n"
                         
                     else:
                         rrt_path = None
@@ -914,26 +928,26 @@ def generate_fruit_path(unpaired_apple_input, unpaired_person_input, bad_lemon_i
                         )
                         
                         attempt = 0
-                        
+                        log += "attempting to get to the lemon via RRT!\n"
                         while rrt_path is None and attempt < 20:
                             rrt_path = rrt_res.planning()
                             attempt += 1
                         
                         if rrt_path is None:
                             # we made our attempts and none were successful, we should now give up on this lemon
+                            log += "RRT failed! aborting attempt\n"
                             continue
-                         
+                        
+                        log += "RRT succeeded in {} steps\n".format(attempt)
                         rrt_path.reverse()
                         
                         path = rrt_path
 
                     
-
-                    # just push it 0.5m for now
-                    #print(to_lemon[-1], the_lemon)
-
+                    
                     dest = push_lemon_x(path[-1], the_lemon[0:2], 0.5)
 
+                    log += "found paths to get to and push lemon!\nmoving the lemon to approx. {}, {}\n".format(dest[0], dest[1])
 
                     seq_int = path + [dest]
 
@@ -951,6 +965,6 @@ def generate_fruit_path(unpaired_apple_input, unpaired_person_input, bad_lemon_i
     #    print(length)
 
         if length < best_sol[1]:
-            best_sol = (seq, length)
+            best_sol = (seq, length, log)
 
-    return best_sol[0]
+    return best_sol
