@@ -644,6 +644,7 @@ class CircleT(Circle):
 def ignore_obs(obs_list, ignore):
     obs_cpy = obs_list[:]
     for i, obs in enumerate(obs_list):
+        print(obs.center, ignore[0:2])
         if all(obs.center == ignore[0:2]):
             obs_cpy.remove(obs)
     return obs_cpy
