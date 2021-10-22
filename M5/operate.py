@@ -3,6 +3,12 @@
 ##########################################################
 
 # import modules
+import matplotlib
+matplotlib.use('TkAgg',  force=True)
+import matplotlib.pyplot as plt
+plt.switch_backend('Agg')
+
+
 import sys, os
 import ast
 import numpy as np
@@ -12,6 +18,7 @@ import pygame
 import cv2
 import time
 import math
+import tkinter
 
 # import utility functions
 sys.path.insert(0, "{}/util".format(os.getcwd()))
@@ -36,7 +43,7 @@ from cv.estimate_pose import *
 # import the helper functions
 from helper import *
 from helper_james import *
-import matplotlib.pyplot as plt
+
 
 class Operate:
     def __init__(self, args):
@@ -133,19 +140,22 @@ class Operate:
         self.finished_navigating = True # we start off at the waypoint
         self.turning = True
         self.keyboard_overridden = False
+        self.prev_distance_error = np.inf
+        self.states = {"manual": 0, "begin_automation" : 1, "navigation_turning" : 2, "navigation_forward": 3, "navigation_arrived_waypoint" : 4, "navigation_complete" : 5}
+        self.state = self.states["manual"]
         
         # compute the controller gains, tolerances and parameters
         self.K_pw = 1
-        self.angle_tolerance = 0.1 #rads, 0.1 rads ~ 5 degrees
+        self.angle_tolerance = 0.02 #rads, 0.1 rads ~ 5 degrees
         self.K_pv = 1
-        self.dist_tolerance = 0.1 #metres
+        self.dist_tolerance = 0.01 #metres
         
         # initialise rrt parameters
         self.r_true_apple = 0.075
         self.r_true_lemon = 0.06
         self.r_true_person = 0.19
         self.r_true_marker = 0.1
-        self.obstacle_padding = 0.05 * -1
+        self.obstacle_padding = 0.08
         self.r_true_apple += self.obstacle_padding
         self.r_true_lemon += self.obstacle_padding
         self.r_true_person += self.obstacle_padding
@@ -245,6 +255,7 @@ class Operate:
             colour_mask = [0] * len(detections) # 1 if we ar e keeping detection
             print(detections)
             print(len(detections))
+            detection_coordinates = []
             
             for target_index, target in enumerate(detections):
                 class_id = int(target[5])
@@ -262,6 +273,7 @@ class Operate:
                     print(f"dist: {distance_from_robot}")
                     self.inference_buffer[class_id].append(target_world)
                     colour_mask[target_index] = 1
+                    detection_coordinates.append(target_world)
                     
                 else:
                     print("invalid")
@@ -270,7 +282,7 @@ class Operate:
                     
             print(f"mask: {colour_mask}")
             
-            annotate = Annotate(detection.imgs, detection.pred, detection.names, colour_mask)
+            annotate = Annotate(detection.imgs, detection.pred, detection.names, colour_mask, detection_coordinates)
             self.network_vis = annotate.get_annotations()
 
     # save raw images taken by the camera
@@ -450,27 +462,27 @@ class Operate:
             # drive forward
             if event.type == pygame.KEYDOWN and event.key == pygame.K_UP:
                 self.command['motion'][0] = min(self.command['motion'][0]+1, 1)
-                self.keyboard_overridden = True
+                self.state = self.states["manual"]
                 
             # drive backward
             elif event.type == pygame.KEYDOWN and event.key == pygame.K_DOWN:
                 self.command['motion'][0] = max(self.command['motion'][0]-1, -1)
-                self.keyboard_overridden = True
+                self.state = self.states["manual"]
                 
             # turn left
             elif event.type == pygame.KEYDOWN and event.key == pygame.K_LEFT:
                 self.command['motion'][1] = min(self.command['motion'][1]+1, 1)
-                self.keyboard_overridden = True
+                self.state = self.states["manual"]
                 
             # drive right
             elif event.type == pygame.KEYDOWN and event.key == pygame.K_RIGHT:
                 self.command['motion'][1] = max(self.command['motion'][1]-1, -1)
-                self.keyboard_overridden = True
+                self.state = self.states["manual"]
                 
             # stop
             elif event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE:
                 self.command['motion'] = [0, 0]
-                self.keyboard_overridden = True
+                self.state = self.states["manual"]
                 
             # save image
             elif event.type == pygame.KEYDOWN and event.key == pygame.K_i:
@@ -518,27 +530,10 @@ class Operate:
             elif event.type == pygame.KEYDOWN and event.key == pygame.K_n:
                 self.command['save_inference'] = True
                 
-            # save object detection outputs
+            # start running the fuill auto fruit delivery code
             elif event.type == pygame.KEYDOWN and event.key == pygame.K_a:
-                self.auto_waypoint_enabled = True
-                #self.finished_navigating = False
-                self.turning = True
-                
-                start_point = np.array([self.ekf.robot.state[0][0], self.ekf.robot.state[1][0]])
-                finish_point = np.array([0,0]) # set to this because finish point overwwritten byrrt anyway
-                # this list returns the sequence of waypoints from finish to start (so its in reverse order), including the robot initial position
-                self.auto_waypoint_list = self.generate_waypoint_list(start_point, finish_point)
-                
-                self.auto_waypoint_list.reverse()
-                                
-                # we remove the last element of the list, because generate_waypoint_list 
-                # includes the starting position of the robot, which we are already located at
-                print(f"wayppoits: {self.auto_waypoint_list}")
-                if len(self.auto_waypoint_list) > 0:
-                    self.auto_waypoint_list.pop()
-                else:
-                    print("Failed to generate waypoint list")
-                
+                self.state = self.states["begin_automation"]
+
             # merge estimations and save to targets.txt
             elif event.type == pygame.KEYDOWN and event.key == pygame.K_m:
                 # merge the estimations of the targets so that there are at most 3 estimations of each target type
@@ -564,6 +559,7 @@ class Operate:
                 # flag that tells us if the gui has been clicked (used to help auto navigation)
                 self.gui_clicked = True 
                 
+                """
                 # set manual waypoint and navigate safely 
                 if pos[0] >= self.default_width and self.args.auto:
                     x,y = pix_to_world(pos[0], pos[1], self.u0, self.v0, self.semiauto_gui_width)
@@ -595,6 +591,7 @@ class Operate:
                     self.finished_navigating = False
                     self.turning = True
                     
+                    """
             #if self.keyboard_overridden:
                 #self.finished_navigating = True
                 #self.turning = True
@@ -603,51 +600,59 @@ class Operate:
             pygame.quit()
             sys.exit()
     
-    def navigate_to_waypoint(self):
+    def state_transition(self):
+        
+        if self.state == self.states["manual"]:
+            pass
+    
+        elif self.state == self.states["begin_automation"]:
+            self.auto_waypoint_list = self.generate_waypoint_list()
+            self.auto_waypoint_list.reverse()
+            if len(self.auto_waypoint_list) > 0:
+                    self.auto_waypoint_list.pop()
+                    self.state = self.states["navigation_arrived_waypoint"]
 
-        # Check if we are still navigating to waypoint or whether we are awaiting a new waypoint
-        if not self.finished_navigating:
-        
-            # Compute both angular and radial error
+            else:
+                print("Failed to generate waypoint list")
+            
+        elif self.state == self.states["navigation_turning"]:
             error_theta = get_angle_robot_to_goal(self.waypoint, self.ekf.robot.state)
-            error_dist = get_distance_robot_to_goal(self.waypoint, self.ekf.robot.state)
-        
-            # If error in angle is too large, we need to generate a new omega command to correct angle
-            if abs(error_theta) > self.angle_tolerance and self.turning:
+            if abs(error_theta) > self.angle_tolerance:
                 control_v = 0 # We are only turning here
                 control_omega, _ = PControllerOmegaDynamic(self.waypoint, self.ekf.robot.state, self.K_pw)
                 self.command['motion'] = create_motion_command(control_v, control_omega)
-                
-            # If error in distance is too large, we need to keep driving straight to get to waypoint, else we are done navigating
-            elif abs(error_dist) > self.dist_tolerance:
-                self.turning = False
+            else:
+                self.command['motion'] = [0,0]
+                self.state = self.states["navigation_forward"]
+            
+        elif self.state == self.states["navigation_forward"]:
+            error_dist = get_distance_robot_to_goal(self.waypoint, self.ekf.robot.state)
+            #if abs(error_dist) < abs(self.prev_distance_error):
+            if abs(error_dist) > abs(self.dist_tolerance) and abs(error_dist) < abs(self.prev_distance_error):
+            
+                self.prev_distance_error = error_dist
                 control_omega = 0 # only driving straight
                 control_v, _ = PControllerV(self.waypoint, self.ekf.robot.state, self.K_pv)
                 self.command['motion'] = create_motion_command(control_v, control_omega)
-                
-            # Done navigating, awaiting new waypoint now
             else:
+                self.prev_distance_error = np.inf
                 self.command['motion'] = [0,0]
-                self.finished_navigating = True
-                self.turning = True
-               
-    def automate_waypoint(self):
-        """ Add code that genrates waypoint automatically
-    
-        """
-        #if self.args.auto and self.finished_navigating and self.gui_clicked:
-        if self.args.auto and self.finished_navigating and len(self.auto_waypoint_list) > 0:
-            self.waypoint = self.auto_waypoint_list.pop()
-            print(f"new waypoint set: {self.waypoint}")
-            self.turning = True
-            self.finished_navigating = False
-            self.gui_clicked = False
-            pass
-        elif len(self.auto_waypoint_list) == 0:
-            self.finished_navigating = True
-            pass
+                self.state = self.states["navigation_arrived_waypoint"]
                 
-    def generate_waypoint_list(self, start_point, goal_point, timeout = 100):
+        elif self.state == self.states["navigation_arrived_waypoint"]:
+            if len(self.auto_waypoint_list) > 0:
+                self.waypoint = self.auto_waypoint_list.pop()
+                self.state = self.states["navigation_turning"]
+            else:
+                self.state = self.states["navigation_complete"]
+            
+        elif self.state == self.states["navigation_complete"]:
+            self.state = self.states["begin_automation"]
+            
+                
+    def generate_waypoint_list(self):
+    
+        start_point = np.array([self.ekf.robot.state[0][0], self.ekf.robot.state[1][0]])
         all_obstacles = []
         for entry in self.object_locations[0]:
             all_obstacles.append(CircleT(entry[0], entry[1], self.r_true_apple, 0))
@@ -658,19 +663,24 @@ class Operate:
         for entry in self.object_locations[2]:
             all_obstacles.append(CircleT(entry[0], entry[1], self.r_true_person, 2))
     
-        for entry in self.ekf.markers:
-            all_obstacles.append(CircleT(entry[0], entry[1], self.r_true_marker, 3))
+        for i in range(int(self.ekf.markers.size/2)):
+            all_obstacles.append(CircleT(self.ekf.markers[0, i], self.ekf.markers[1, i], self.r_true_marker, 3))
                     
 
         lemon_not_done = objects_not_done(self.object_locations[0], self.object_locations[1], self.object_locations[2])
         print("Objects not done")
         print(f"Lemons- {lemon_not_done}")
         
-        waypoints = generate_fruit_path(0, 0, lemon_not_done, all_obstacles,start_point, 20)
-        print("Waypoints generated")
-        #animate_path_x(np.array(waypoints), (-1.5, 1.5), (-1.5, 1.5), all_obstacles)
-        #plt.show()
+        # TEMP
+        lemon_not_done = list(self.object_locations[1])
         
+        waypoints, pathlength, log = generate_fruit_path(0, 0, lemon_not_done, all_obstacles,start_point, 20)
+
+        print("Waypoints generated")
+        print(log)
+        animate_path_x(np.array(waypoints), (-1.5, 1.5), (-1.5, 1.5), all_obstacles)
+        #plt.show()
+        plt.savefig("rrt.png")
         
         
         return waypoints

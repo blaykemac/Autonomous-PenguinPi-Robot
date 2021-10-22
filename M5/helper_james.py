@@ -1,5 +1,7 @@
 import numpy as np
 import math
+import matplotlib
+matplotlib.use('tkagg')
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 from matplotlib.lines import Line2D
@@ -1007,13 +1009,14 @@ def generate_fruit_path(unpaired_apple_input, unpaired_person_input, bad_lemon_i
                             goal=potential_lemon_push_pos, 
                             width=abs_world_bound, height=abs_world_bound, 
                             obstacle_list=all_obstacles, 
-                            expand_dis=0.4, path_resolution=0.04,
-                            max_points=100
+                            expand_dis=0.2, path_resolution=0.04,
+                            max_points=100*2
                         )
                         
                         attempt = 0
                         log += "attempting to get to the lemon via RRT!\n"
                         while rrt_path is None and attempt < 20:
+                            print(f"attempt: {attempt}" )
                             rrt_path = rrt_res.planning()
                             attempt += 1
                         
