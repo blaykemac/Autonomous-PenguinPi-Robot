@@ -689,7 +689,22 @@ def find_collinear_behind(B, A, offset):
     return B + k_BA
 
 
-def push_bad_lemon_away(lemon, obs, robot_collinear_space = 0.05):
+
+def map_point_to_corner(point, abs_world_bounds = 1.2):
+    if point[0] > 0:
+        x = abs_world_bounds
+    else:
+        x = -abs_world_bounds
+
+    if point[1] > 0:
+        y = abs_world_bounds
+    else:
+        y = -abs_world_bounds
+
+    return np.array([x,y])
+
+
+def push_bad_lemon_away(lemon, obs, robot_collinear_space = 0.08):
     # need to determine a path that:
     # - has a straight path with no obstacles
     
@@ -736,7 +751,7 @@ def compute_seq_length(seq):
 
 
 
-def push_lemon_x(A, B, dist):
+def push_lemon_x(A, B, dist, abs_world_bounds = 1.2):
     
     AB = B - A
     # find k s.t. k * abs(AB) = abs(AB) + dis
@@ -746,7 +761,39 @@ def push_lemon_x(A, B, dist):
     
     k_AB = k*AB
     
-    return A + k_AB
+    m, n = np.inf, np.inf
+    
+    corner = map_point_to_corner(A + k_AB, abs_world_bounds)
+    #rint("corner: ", corner)
+    
+    #rint("A + kAB", A + k_AB)
+    #rint("kAB", k_AB)
+    
+    if abs((A + k_AB)[0]) > abs_world_bounds:
+        if k_AB[0] != 0:
+            n = (corner[0] - A[0])/k_AB[0]
+#        else:
+#            n = 1
+    
+    if abs((A + k_AB)[1]) > abs_world_bounds:
+        if k_AB[1] != 0:
+            m = (corner[1] - A[1])/k_AB[1]
+#        else:
+#            m = 1
+    
+    #rint("mkAB", m * k_AB)
+    #rint("m: ", m, "n: ", n)
+    #rint("nkAB", n * k_AB)
+    
+    if m == np.inf and n == np.inf:
+        t = 1
+    else:
+        t = min(abs(m), abs(n))
+    
+    tk_AB = t * k_AB
+    
+    #rint("final point: ", A + tk_AB)
+    return A + tk_AB
 
 
 
@@ -839,8 +886,33 @@ def objects_not_done(apple_gt, lemon_gt, person_gt):
     return lemons_not_done
 
 
-def generate_fruit_path(unpaired_apple_input, unpaired_person_input, bad_lemon_input, all_obstacles, initial_point, iterations):
+def straightline_intermediate_points(p1, p2, n=10):
+    dx = np.linspace(p1[0], p2[0], n)
+    dy = np.linspace(p1[1], p2[1], n)
     
+    return list(np.block([[dx],[dy]]).T)
+
+
+
+class Instruction:
+    def __init__(self, point, tag):
+        self.point = np.array(point)
+        self.tag = tag
+        
+    def __getitem__(self, idx):
+        if idx == 0:
+            return self.point[0]
+        elif idx == 1:
+            return self.point[1]
+        else:
+            raise IndexError("index out of bounds (my class one)")
+
+
+
+def generate_fruit_path(unpaired_apple_input, unpaired_person_input, bad_lemon_input, all_obstacles, initial_point, iterations, abs_world_bound = 1.4):
+    
+    NAV_WAYPOINT_TAG = 0
+    PUSH_WAYPOINT_TAG = 1
     # initial conditions
     best_sol = ([], np.inf, "")
     print("beginning fruit path iteration")
@@ -861,10 +933,13 @@ def generate_fruit_path(unpaired_apple_input, unpaired_person_input, bad_lemon_i
         done_lemon = False
         # build path that pairs people with apples, removes lemons, compute total distance
 
-        seq = []
-        seq.append(initial_point)
+        # type 0 for nav waypoint, type 1 for fruit push waypoint
+        
+        instruction = []
+        instruction.append(Instruction(initial_point, NAV_WAYPOINT_TAG))
 
         while True:
+            #rint(log)
             # move apple to person or move lemon away
             #flag = np.random.randint(0,2)
             seq_int = []
@@ -892,16 +967,24 @@ def generate_fruit_path(unpaired_apple_input, unpaired_person_input, bad_lemon_i
                 else:
                     random.shuffle(bad_lemon)
                     the_lemon = bad_lemon.pop()
-                    bad_lemon_choice = push_bad_lemon_away(the_lemon, all_obstacles)
+                    bad_lemon_choices = push_bad_lemon_away(the_lemon, all_obstacles)
                     
                     log += "attemting to push lemon at {}, {}.\n".format(the_lemon[0], the_lemon[1])
                     
-                    if bad_lemon_choice is None:
+                    if bad_lemon_choices is None:
                         log += "couldnt find a direction to push lemon, aborting\n"
                         continue
-                    potential_lemon_push_pos = random.choice(bad_lemon_choice) # just take first one for now
                     
+                    # check which quadrant we're in, push lemon towards closest corner if possible.
+                    corner = map_point_to_corner(the_lemon[0:2], abs_world_bounds = abs_world_bound)
                     
+                    # distances_from_corner
+                    distances = [np.linalg.norm(corner - n) for n in bad_lemon_choices]
+                    
+                    idx = np.argmax(distances)
+                    
+                    potential_lemon_push_pos = bad_lemon_choices[idx]
+
 
                     #print(potential_lemon_push_pos)
                     ## RRT to lemon, push straight
@@ -911,17 +994,18 @@ def generate_fruit_path(unpaired_apple_input, unpaired_person_input, bad_lemon_i
                     
                     
                     
-                    if not collision_between_points(seq[-1], potential_lemon_push_pos, all_obstacles, radius=0):
-                        path = [potential_lemon_push_pos]
+                    if not collision_between_points(instruction[-1], potential_lemon_push_pos, all_obstacles, radius=0):
+                        pts = straightline_intermediate_points(potential_lemon_push_pos, instruction[-1])
+                        path = [Instruction(n, NAV_WAYPOINT_TAG) for n in pts]
                         log += "found a straightline path to the lemon!\n"
                         
                     else:
                         rrt_path = None
 
                         rrt_res = RRT(
-                            start=seq[-1],
+                            start=instruction[-1].point,
                             goal=potential_lemon_push_pos, 
-                            width=1.4, height=1.4, 
+                            width=abs_world_bound, height=abs_world_bound, 
                             obstacle_list=all_obstacles, 
                             expand_dis=0.4, path_resolution=0.04,
                             max_points=100
@@ -941,30 +1025,29 @@ def generate_fruit_path(unpaired_apple_input, unpaired_person_input, bad_lemon_i
                         log += "RRT succeeded in {} steps\n".format(attempt)
                         rrt_path.reverse()
                         
-                        path = rrt_path
-
+                        path = [Instruction(n, NAV_WAYPOINT_TAG) for n in rrt_path]
                     
-                    
-                    dest = push_lemon_x(path[-1], the_lemon[0:2], 0.5)
+                                        
+                    dest = push_lemon_x(path[-1].point, the_lemon[0:2], 0.5, abs_world_bounds = abs_world_bound)
 
                     log += "found paths to get to and push lemon!\nmoving the lemon to approx. {}, {}\n".format(dest[0], dest[1])
 
-                    seq_int = path + [dest]
-
+                    instr_int = path + [ Instruction(dest, PUSH_WAYPOINT_TAG) ]
+                    
             #print(done_apple, done_lemon)
 
             if done_lemon: #and done_lemon:
                 break
             else:
-                seq += seq_int
+                instruction += instr_int
                 #print(np.array(seq))
 
         # done a sequence, compute sequence length
 
-        length = compute_seq_length(seq)
+        length = compute_seq_length([instr.point for instr in instruction])
     #    print(length)
 
         if length < best_sol[1]:
-            best_sol = (seq, length, log)
+            best_sol = (instruction, length, log)
 
     return best_sol
