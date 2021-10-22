@@ -1,12 +1,12 @@
 import numpy as np
 import math
 import matplotlib
-matplotlib.use('tkagg')
+#matplotlib.use('tkagg')
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 from matplotlib.lines import Line2D
 import random
-
+from functools import reduce
 
 ###### OLD MATH FUNCTIONS ######
 def compute_distance_between_points(p1, p2):
@@ -653,7 +653,7 @@ def ignore_obs(obs_list, ignore):
 
 
 
-def collision_between_points(p1, p2, obs_list, radius, samples=50):
+def collision_between_points(p1, p2, obs_list, radius, samples=100):
     x_vals = np.linspace(p1[0], p2[0], samples)
     y_vals = np.linspace(p1[1], p2[1], samples)
     
@@ -692,7 +692,7 @@ def find_collinear_behind(B, A, offset):
 
 
 
-def map_point_to_corner(point, abs_world_bounds = 1.2):
+def map_point_to_corner(point, abs_world_bounds = 1.4):
     if point[0] > 0:
         x = abs_world_bounds
     else:
@@ -706,14 +706,14 @@ def map_point_to_corner(point, abs_world_bounds = 1.2):
     return np.array([x,y])
 
 
-def push_bad_lemon_away(lemon, obs, robot_collinear_space = 0.08):
+def push_bad_lemon_away(lemon, obs, robot_collinear_space = 0.04):
     # need to determine a path that:
     # - has a straight path with no obstacles
     
     # generate a bunch of potential straight line paths 
     
     # need a path thats wide enough for 4cm radius lemon
-    pushed_lemon_r = 0.05
+    pushed_lemon_r = 0.04
     
     potential_traj = []
     for angle in np.linspace(0, 2*np.pi, 30):
@@ -753,7 +753,7 @@ def compute_seq_length(seq):
 
 
 
-def push_lemon_x(A, B, dist, abs_world_bounds = 1.2):
+def push_lemon_x(A, B, dist, abs_world_bounds = 1.4):
     
     AB = B - A
     # find k s.t. k * abs(AB) = abs(AB) + dis
@@ -978,7 +978,7 @@ def generate_fruit_path(unpaired_apple_input, unpaired_person_input, bad_lemon_i
                         continue
                     
                     # check which quadrant we're in, push lemon towards closest corner if possible.
-                    corner = map_point_to_corner(the_lemon[0:2], abs_world_bounds = abs_world_bound)
+                    corner = map_point_to_corner(the_lemon[0:2], abs_world_bounds = 1.5) # real corners here to direct lemons
                     
                     # distances_from_corner
                     distances = [np.linalg.norm(corner - n) for n in bad_lemon_choices]
@@ -997,7 +997,8 @@ def generate_fruit_path(unpaired_apple_input, unpaired_person_input, bad_lemon_i
                     
                     
                     if not collision_between_points(instruction[-1], potential_lemon_push_pos, all_obstacles, radius=0):
-                        pts = straightline_intermediate_points(potential_lemon_push_pos, instruction[-1])
+                        pts = straightline_intermediate_points(instruction[-1], potential_lemon_push_pos)
+                        #print(pts)
                         path = [Instruction(n, NAV_WAYPOINT_TAG) for n in pts]
                         log += "found a straightline path to the lemon!\n"
                         
@@ -1016,7 +1017,8 @@ def generate_fruit_path(unpaired_apple_input, unpaired_person_input, bad_lemon_i
                         attempt = 0
                         log += "attempting to get to the lemon via RRT!\n"
                         while rrt_path is None and attempt < 20:
-                            print(f"attempt: {attempt}" )
+                            collision = reduce(lambda a, b: a or b, [n.is_in_collision_with_points([instruction[-1].point]) for n in all_obstacles])
+                            print(f"attempt: {attempt}, start point: {instruction[-1].point}, colliding? : {collision}" )
                             rrt_path = rrt_res.planning()
                             attempt += 1
                         
@@ -1046,8 +1048,9 @@ def generate_fruit_path(unpaired_apple_input, unpaired_person_input, bad_lemon_i
                 #print(np.array(seq))
 
         # done a sequence, compute sequence length
-
-        length = compute_seq_length([instr.point for instr in instruction])
+        points = [instr.point for instr in instruction]
+        #print(points)
+        length = compute_seq_length(points)
     #    print(length)
 
         if length < best_sol[1]:

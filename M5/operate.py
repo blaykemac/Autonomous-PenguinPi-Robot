@@ -136,6 +136,7 @@ class Operate:
         #self.detections_buffer 
         
         # initialise waypoint
+        self.instruction = None
         self.waypoint = None #np.array([0.0, 0.0])
         self.finished_navigating = True # we start off at the waypoint
         self.turning = True
@@ -160,7 +161,7 @@ class Operate:
         self.r_true_lemon += self.obstacle_padding
         self.r_true_person += self.obstacle_padding
         self.r_true_marker += self.obstacle_padding
-        self.auto_waypoint_list = []
+        self.auto_instruction_list = []
         
         # optionally load the true map instead of using SLAM to draw object locations
         if args.truemap:
@@ -606,10 +607,10 @@ class Operate:
             pass
     
         elif self.state == self.states["begin_automation"]:
-            self.auto_waypoint_list = self.generate_waypoint_list()
-            self.auto_waypoint_list.reverse()
-            if len(self.auto_waypoint_list) > 0:
-                    self.auto_waypoint_list.pop()
+            self.auto_instruction_list = self.generate_instruction_list()
+            self.auto_instruction_list.reverse()
+            if len(self.auto_instruction_list) > 0:
+                    self.auto_instruction_list.pop()
                     self.state = self.states["navigation_arrived_waypoint"]
 
             else:
@@ -640,8 +641,9 @@ class Operate:
                 self.state = self.states["navigation_arrived_waypoint"]
                 
         elif self.state == self.states["navigation_arrived_waypoint"]:
-            if len(self.auto_waypoint_list) > 0:
-                self.waypoint = self.auto_waypoint_list.pop()
+            if len(self.auto_instruction_list) > 0:
+                self.instruction = self.auto_instruction_list.pop()
+                self.waypoint = self.instruction.point
                 self.state = self.states["navigation_turning"]
             else:
                 self.state = self.states["navigation_complete"]
@@ -650,7 +652,7 @@ class Operate:
             self.state = self.states["begin_automation"]
             
                 
-    def generate_waypoint_list(self):
+    def generate_instruction_list(self):
     
         start_point = np.array([self.ekf.robot.state[0][0], self.ekf.robot.state[1][0]])
         all_obstacles = []
@@ -674,16 +676,16 @@ class Operate:
         # TEMP
         lemon_not_done = list(self.object_locations[1])
         
-        waypoints, pathlength, log = generate_fruit_path(0, 0, lemon_not_done, all_obstacles,start_point, 20)
+        instructions, pathlength, log = generate_fruit_path(0, 0, lemon_not_done, all_obstacles,start_point, 20)
 
-        print("Waypoints generated")
+        print("nstructions generated")
         print(log)
-        animate_path_x(np.array(waypoints), (-1.5, 1.5), (-1.5, 1.5), all_obstacles)
+        animate_path_x(np.array([n.point for all n in instructions]), (-1.5, 1.5), (-1.5, 1.5), all_obstacles)
         #plt.show()
         plt.savefig("rrt.png")
         
         
-        return waypoints
+        return instructions
         #rrt = RRT(start=start_point, goal=goal_point, width=1.4, height=1.4, obstacle_list=all_obstacles, expand_dis=0.2, path_resolution=0.04)
         
         """
