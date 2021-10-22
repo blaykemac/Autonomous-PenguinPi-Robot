@@ -256,7 +256,7 @@ class Operate:
             colour_mask = [0] * len(detections) # 1 if we ar e keeping detection
             print(detections)
             print(len(detections))
-            detection_coordinates = []
+            detection_coordinates = [None] * len(detections)
             
             for target_index, target in enumerate(detections):
                 class_id = int(target[5])
@@ -264,17 +264,20 @@ class Operate:
                 box = target[:4]
                 robot_pose = self.ekf.robot.state[:3]
                 target_world = box_to_world(box, robot_pose, class_name, self.camera_matrix[0][0])
+                #target_world_test = box_to_world_mtrx(box, robot_pose, class_name, self.camera_matrix)
+                #print(target_world_test)
                 confidence = target[4]
                 print(f"target_world: {target_world}")
                 # gonna need to check if self.premerge flag is true ebefore running 
                 distance_from_robot = np.hypot(target_world[0] - self.ekf.robot.state[0], target_world[1] - self.ekf.robot.state[1])
+                detection_coordinates[target_index] = target_world
                 if distance_from_robot < self.estimation_threshold and confidence > self.confidence_threshold:
                     print("valid")
                     print(f"index, cls {target_index}, {class_id}")
                     print(f"dist: {distance_from_robot}")
                     self.inference_buffer[class_id].append(target_world)
                     colour_mask[target_index] = 1
-                    detection_coordinates.append(target_world)
+
                     
                 else:
                     print("invalid")
@@ -644,12 +647,80 @@ class Operate:
             if len(self.auto_instruction_list) > 0:
                 self.instruction = self.auto_instruction_list.pop()
                 self.waypoint = self.instruction.point
-                self.state = self.states["navigation_turning"]
+                if self.instruction.tag == 0: # regular navigation waypoint
+                    self.state = self.states["navigation_turning"]
+                elif self.instruction.tag == 1: # lemon moving waypoint
+                    self.state = self.states["pushing_lemon"]
             else:
                 self.state = self.states["navigation_complete"]
             
-        elif self.state == self.states["navigation_complete"]:
-            self.state = self.states["begin_automation"]
+        elif self.state == self.states["pushing_lemon"]:
+            # attempting to push lemon, should be nearby but probably arent aligned properly.
+
+            self.state = self.states["track_lemon"]
+            # use the new lemon position and your current position to compute a new wp that will push the lemon in approximately the same direction as the original wp. (another state)
+            # after push, reverse and rescan lemon, update its position
+            # if lemon is obstructing next waypoint, attempt to rrt to it or a waypoint in front of it (if its a nav. wp)
+        elif self.state == self.states["track_lemon"]:
+            # rotate 360 degrees to locate lemon, one lemon is located (and map is low variance), record lemons position relative to current pos (probably make this a state)
+            # record lemon, if you're turning really far you could be in the wrong position, maybe check for a marker too?
+            # do n blind turns s.t. the robot has explored its entire 360 degree fov. hopefully found the lemon by now. stop after each rotation and do a detection.
+            # if potentially found lemon, confirm (somehow)
+            # if confirmed, make sure that variance is low (might have to spin and update markers
+            # with lemon in sight and low variance, save lemon position
+            detection = self.yolo_detector.infer(self.img)
+            detections = detection.xywh[0].cpu().numpy()
+            robot_pose = self.ekf.robot.state[:3]
+            potential_targets = []
+
+            for target in detections:
+                class_id = int(target[5])
+                class_name = self.class_names[class_id]
+                if class_name != 'lemon':
+                    continue
+                box = target[:4]
+                target_world = box_to_world(box, robot_pose, class_name, self.camera_matrix[0][0])
+                confidence = target[4]
+                distance_from_robot = np.hypot(target_world[0] - self.ekf.robot.state[0],
+                                               target_world[1] - self.ekf.robot.state[1])
+                if distance_from_robot < self.estimation_threshold and confidence > self.confidence_threshold:
+                    print("valid")
+                    potential_targets.append((target_world, distance_from_robot))
+
+            if len(potential_targets) == 0:
+                # shouldve found a lemon, just move on for now
+                self.state = self.states['navigation_arrived_waypoint']
+            else:
+                # found a lemon, check how many and try see if its the right one
+                current_best_lemon = None
+                current_best_dist = np.inf
+                intended_lemon_target = self.instruction.target
+                for potential in potential_targets:
+                    if np.linalg.norm(potential[0]-intended_lemon_target) < current_best_dist:
+                        current_best_dist = np.linalg.norm(potential[0]-intended_lemon_target)
+                        current_best_lemon = potential
+                # update object map to contain new lemon position
+                for i, lemon in enumerate(self.object_locations[1]):
+                    if np.array_equal(lemon, intended_lemon_target):
+                        self.object_locations[1][i] = current_best_lemon
+                # calculate new waypoint(s) to push lemon parallel to previous trajectory
+                prev_traj = (self.instruction.point, self.auto_instruction_list[-1].point)  # src, dest
+                # calculate_new_traj_parallel()
+                # if new trajectory is very similar to previous one, traj is probably correct, may now push lemon
+                # compare_traj
+                # else, make a navigation waypoint to new aligned position and repeat process
+
+
+            """
+            error           _theta = get_angle_robot_to_goal(self.waypoint, self.ekf.robot.state)
+            if abs(error_theta) > self.angle_tolerance:
+                control_v = 0  # We are only turning here
+                control_omega, _ = PControllerOmegaDynamic(self.waypoint, self.ekf.robot.state, self.K_pw)
+                self.command['motion'] = create_motion_command(control_v, control_omega)
+            else:
+                self.command['motion'] = [0, 0]
+                self.state = self.states["navigation_forward"]
+            """
             
                 
     def generate_instruction_list(self):
@@ -674,13 +745,13 @@ class Operate:
         print(f"Lemons- {lemon_not_done}")
         
         # TEMP
-        lemon_not_done = list(self.object_locations[1])
+        #lemon_not_done = list(self.object_locations[1])
         
-        instructions, pathlength, log = generate_fruit_path(0, 0, lemon_not_done, all_obstacles,start_point, 20)
+        instructions, pathlength, log = generate_fruit_path(0, 0, lemon_not_done, all_obstacles, start_point, 20)
 
         print("nstructions generated")
         print(log)
-        animate_path_x(np.array([n.point for all n in instructions]), (-1.5, 1.5), (-1.5, 1.5), all_obstacles)
+        animate_path_x(np.array([n.point for n in instructions]), (-1.5, 1.5), (-1.5, 1.5), all_obstacles)
         #plt.show()
         plt.savefig("rrt.png")
         

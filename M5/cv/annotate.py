@@ -25,12 +25,13 @@ class Annotate:
         self.mask = mask
         self.mask.reverse() # reverse to match this code for loop
         self.coordinates = coordinates
-        
+        self.coordinates.reverse()
+
         for i, (im, pred) in enumerate(zip(self.imgs, self.pred)):
             if pred.shape[0]:
                 self.annotator = Annotator(im, example=str(self.names))
                 for detection_index, (*box, conf, cls) in enumerate(reversed(pred)):  # xyxy, confidence, class
-                    if self.coordinates == []:
+                    if self.coordinates[detection_index] is None:
                         label = f'{self.names[int(cls)]} {conf:.2f}'
                     else:
                         label = f'{self.names[int(cls)]} {conf:.2f} x:{self.coordinates[detection_index][0]:.2f}, y: {self.coordinates[detection_index][1]:.2f}'

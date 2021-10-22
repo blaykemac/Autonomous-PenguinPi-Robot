@@ -72,15 +72,15 @@ def box_to_world(box, robot_pose, class_name, focal_length):
     image_height = 480
     
     # image centre coordiante system origin
-    u0 = image_width / 2
-    v0 = image_height / 2
+    u0 = image_width / 2 + 0.5
+    v0 = image_height / 2 + 0.5
     
     # left of the box
     u = box[0] - u0
     # bottom of box
     v = v0 - (box[1] + box[3] / 2)
      # right of box
-    uprime = box[0] - u0
+    uprime = box[2] - u0
     # top of box
     vprime = v0 - (box[1] - box[3] / 2)
     
@@ -97,10 +97,51 @@ def box_to_world(box, robot_pose, class_name, focal_length):
     R_theta = np.block([[np.cos(th), -np.sin(th)],[np.sin(th), np.cos(th)]])
     lm_bff = OBprime[0:2].T
     camera_offset = np.array([0.08, 0])
-    OB_world = robot_xy + camera_offset + R_theta @ lm_bff
+    OB_world = robot_xy + R_theta @ (lm_bff + camera_offset) #
     
     return np.array([OB_world[0], OB_world[1]]) #(x,y), world coordinates
 
+
+# tried some matrix thing from online, couldnt make it work
+def box_to_world_mtrx(box, robot_pose, class_name, intrinsic):
+    ######### Replace with your codes #########
+    # TODO: compute pose of the target based on bounding box info and robot's pose
+    # actual sizes of targets
+    apple_dimensions = [0.075448, 0.074871, 0.071889]
+    lemon_dimensions = [0.060588, 0.059299, 0.053017]
+    person_dimensions = [0.07112, 0.18796, 0.37592]
+    target_dimensions = {"apple": apple_dimensions, "lemon": lemon_dimensions, "person": person_dimensions}
+    true_height = target_dimensions[class_name][2]
+
+    K = np.zeros((3, 4))
+    K[0:3, 0:3] = intrinsic
+
+    top_left_point = np.block([box[0], box[1]])
+    top_right_point = top_left_point + np.block([box[2], 0])
+    bottom_left_point = top_left_point + np.block([0, box[3]])
+    bottom_right_point = top_left_point + np.block([box[2], box[3]])
+
+    corners = [top_left_point, top_right_point, bottom_left_point, bottom_right_point]
+
+    corners_wrld = [0]*4
+    corners_wrld_scaled = [0] * 4
+
+    for i, point in enumerate(corners):
+        corners_wrld[i] = np.linalg.inv(intrinsic) @ np.hstack([point, 1]).T
+
+    # scale these projected world coordinates s.t. the height = true_height
+
+    dy_left = bottom_left_point[1] - top_left_point[1]
+    dy_right = top_left_point[1] - top_right_point[1]
+
+    dy_avg = (dy_left + dy_right) / 2
+
+    scaling_factor = true_height / dy_avg
+
+    for i, point in enumerate(corners_wrld):
+        corners_wrld_scaled[i] = scaling_factor * point
+
+    print(corners_wrld_scaled)
 
 # merge the estimations of the targets so that there are at most 3 estimations of each target type
 def merge_estimations(objects_est):
