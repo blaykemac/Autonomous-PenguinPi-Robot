@@ -653,7 +653,7 @@ def ignore_obs(obs_list, ignore):
 
 
 
-def collision_between_points(p1, p2, obs_list, radius, samples=100):
+def collision_between_points(p1, p2, obs_list, radius=0, samples=100):
     x_vals = np.linspace(p1[0], p2[0], samples)
     y_vals = np.linspace(p1[1], p2[1], samples)
     
@@ -751,6 +751,15 @@ def compute_seq_length(seq):
         total_len += (np.linalg.norm(seq[i]-seq[i+1]))
     return total_len
 
+
+def go_x_dist_in_dir(A, B, dist):
+    AB = B - A
+
+    # pick k s.t. k*|AB| = dist
+    abs_AB = np.linalg.norm(AB)
+    k = dist/abs_AB
+
+    return A + k*AB
 
 
 def push_lemon_x(A, B, dist, abs_world_bounds = 1.4):
@@ -895,11 +904,39 @@ def straightline_intermediate_points(p1, p2, n=10):
     return list(np.block([[dx],[dy]]).T)
 
 
+def calculate_new_traj_parallel(previous_traj, prev_lemon_loc, new_lemon_loc):
+    # still want to push lemon on same trajectory, just have to maneuver into new position
+    delta_lemon = new_lemon_loc - prev_lemon_loc
+    new_start_pos = previous_traj[0] + delta_lemon
+    push_dist = np.linalg.norm(prev_lemon_loc - previous_traj[0])
+    new_end_pos = push_lemon_x(new_start_pos, new_lemon_loc, push_dist, abs_world_bounds=1.4) # make this a class attribute
+    return new_start_pos, new_end_pos
+
+
+def compare_traj(prev_traj, new_traj):
+    # gradient will always be the same from the way its calculated, check the translation
+    if np.linalg.norm(prev_traj[0] - new_traj[0]) < thresh:
+        return True  # return true for close, false for not
+    return False
+
+
+
+def find_closest_point_match(target_object, objects):
+    current_best_obj = None
+    current_best_dist = np.inf
+    for potential in objects:
+        if np.linalg.norm(potential[0] - target_object) < current_best_dist:
+            current_best_dist = np.linalg.norm(potential[0] - target_object)
+            current_best_obj = potential
+    return current_best_obj
+
+
 
 class Instruction:
-    def __init__(self, point, tag):
+    def __init__(self, point, tag, target = None):
         self.point = np.array(point)
         self.tag = tag
+        self.target = target
         
     def __getitem__(self, idx):
         if idx == 0:
@@ -1037,7 +1074,7 @@ def generate_fruit_path(unpaired_apple_input, unpaired_person_input, bad_lemon_i
 
                     log += "found paths to get to and push lemon!\nmoving the lemon to approx. {}, {}\n".format(dest[0], dest[1])
 
-                    instr_int = path + [ Instruction(dest, PUSH_WAYPOINT_TAG) ]
+                    instr_int = path + [ Instruction(dest, PUSH_WAYPOINT_TAG, target = the_lemon) ]
                     
             #print(done_apple, done_lemon)
 

@@ -162,7 +162,8 @@ class Operate:
         self.r_true_person += self.obstacle_padding
         self.r_true_marker += self.obstacle_padding
         self.auto_instruction_list = []
-        
+        self.route_planning_obstacles = None
+
         # optionally load the true map instead of using SLAM to draw object locations
         if args.truemap:
             # read true coordinates of map from gazebo backend
@@ -650,94 +651,166 @@ class Operate:
                 if self.instruction.tag == 0: # regular navigation waypoint
                     self.state = self.states["navigation_turning"]
                 elif self.instruction.tag == 1: # lemon moving waypoint
-                    self.state = self.states["pushing_lemon"]
+                    self.state = self.states["turn_to_lemon"]
             else:
                 self.state = self.states["navigation_complete"]
-            
-        elif self.state == self.states["pushing_lemon"]:
-            # attempting to push lemon, should be nearby but probably arent aligned properly.
 
-            self.state = self.states["track_lemon"]
-            # use the new lemon position and your current position to compute a new wp that will push the lemon in approximately the same direction as the original wp. (another state)
-            # after push, reverse and rescan lemon, update its position
-            # if lemon is obstructing next waypoint, attempt to rrt to it or a waypoint in front of it (if its a nav. wp)
-        elif self.state == self.states["track_lemon"]:
-            # rotate 360 degrees to locate lemon, one lemon is located (and map is low variance), record lemons position relative to current pos (probably make this a state)
-            # record lemon, if you're turning really far you could be in the wrong position, maybe check for a marker too?
-            # do n blind turns s.t. the robot has explored its entire 360 degree fov. hopefully found the lemon by now. stop after each rotation and do a detection.
-            # if potentially found lemon, confirm (somehow)
-            # if confirmed, make sure that variance is low (might have to spin and update markers
-            # with lemon in sight and low variance, save lemon position
-            detection = self.yolo_detector.infer(self.img)
-            detections = detection.xywh[0].cpu().numpy()
-            robot_pose = self.ekf.robot.state[:3]
-            potential_targets = []
-
-            for target in detections:
-                class_id = int(target[5])
-                class_name = self.class_names[class_id]
-                if class_name != 'lemon':
-                    continue
-                box = target[:4]
-                target_world = box_to_world(box, robot_pose, class_name, self.camera_matrix[0][0])
-                confidence = target[4]
-                distance_from_robot = np.hypot(target_world[0] - self.ekf.robot.state[0],
-                                               target_world[1] - self.ekf.robot.state[1])
-                if distance_from_robot < self.estimation_threshold and confidence > self.confidence_threshold:
-                    print("valid")
-                    potential_targets.append((target_world, distance_from_robot))
-
-            if len(potential_targets) == 0:
-                # shouldve found a lemon, just move on for now
-                self.state = self.states['navigation_arrived_waypoint']
-            else:
-                # found a lemon, check how many and try see if its the right one
-                current_best_lemon = None
-                current_best_dist = np.inf
-                intended_lemon_target = self.instruction.target
-                for potential in potential_targets:
-                    if np.linalg.norm(potential[0]-intended_lemon_target) < current_best_dist:
-                        current_best_dist = np.linalg.norm(potential[0]-intended_lemon_target)
-                        current_best_lemon = potential
-                # update object map to contain new lemon position
-                for i, lemon in enumerate(self.object_locations[1]):
-                    if np.array_equal(lemon, intended_lemon_target):
-                        self.object_locations[1][i] = current_best_lemon
-                # calculate new waypoint(s) to push lemon parallel to previous trajectory
-                prev_traj = (self.instruction.point, self.auto_instruction_list[-1].point)  # src, dest
-                # calculate_new_traj_parallel()
-                # if new trajectory is very similar to previous one, traj is probably correct, may now push lemon
-                # compare_traj
-                # else, make a navigation waypoint to new aligned position and repeat process
-
-
-            """
-            error           _theta = get_angle_robot_to_goal(self.waypoint, self.ekf.robot.state)
+        # needed something to do just a turn before tracking the lemon, this is just copy paste nav turning state
+        elif self.state == self.states["turn_to_lemon"]:
+            error_theta = get_angle_robot_to_goal(self.waypoint, self.ekf.robot.state)
             if abs(error_theta) > self.angle_tolerance:
-                control_v = 0  # We are only turning here
+                control_v = 0 # We are only turning here
                 control_omega, _ = PControllerOmegaDynamic(self.waypoint, self.ekf.robot.state, self.K_pw)
                 self.command['motion'] = create_motion_command(control_v, control_omega)
             else:
                 self.command['motion'] = [0, 0]
-                self.state = self.states["navigation_forward"]
-            """
-            
+                self.state = self.states["track_lemon"]
+
+
+        elif self.state == self.states["track_lemon"]:
+            # once lemon is located, record lemons position relative to current pos (probably make this a state)
+
+            potential_targets = self.detect_class("lemon")
+
+            if len(potential_targets) == 0:
+                # should've found a lemon, just move on for now
+                self.state = self.states['navigation_arrived_waypoint']
+            else:
+                # found lemon(s), find one which corresponds to the target lemon
+                current_best_lemon = self.find_closest_point_match(self.instruction.target.point, potential_targets)
+
+                # update object map to contain new lemon position
+                self.update_object_map(self.instruction.target.point, current_best_lemon, obj_class)
+
+                # calculate new waypoint(s) to push lemon parallel to previous trajectory
+                prev_traj = (self.instruction.point, self.auto_instruction_list[-1].point)  # src, dest
+                new_traj = calculate_new_traj_parallel(previous_traj, intended_lemon_target[0:2], current_best_lemon)
+                # if new trajectory is very similar to previous one, traj is probably correct, may now push lemon
+                matched = compare_traj(prev_traj, new_traj)
+                if matched:
+                    self.instruction = Instruction(new_traj[1], 1, target=current_best_lemon)
+                    self.waypoint = self.instruction.point
+                    self.state = self.states["push_lemon"]
+                # else, make a navigation waypoint to new aligned position and repeat process
+                else:
+                    # add nav waypoint and track lemon waypoint to instruction list
+                    self.auto_instruction_list.append(Instruction(new_traj[1], 1)) # append the lemon align instruction
+                    self.auto_instruction_list.append(Instruction(new_traj[0], 0)) # append the nav instruction BEFORE since these get popped
+                    self.state = self.states["navigation_arrived_waypoint"]
+
+
+        elif self.state == self.states["push_lemon"]:
+            # in position now, time to actually move the lemon
+            error_dist = get_distance_robot_to_goal(self.waypoint, self.ekf.robot.state)
+            # if abs(error_dist) < abs(self.prev_distance_error):
+            if abs(error_dist) > abs(self.dist_tolerance) and abs(error_dist) < abs(self.prev_distance_error):
+                self.prev_distance_error = error_dist
+                control_omega = 0  # only driving straight
+                control_v, _ = PControllerV(self.waypoint, self.ekf.robot.state, self.K_pv)
+                self.command['motion'] = create_motion_command(control_v, control_omega)
+            else:
+                self.prev_distance_error = np.inf
+                self.command['motion'] = [0, 0]
+                self.state = self.states["move_backwards"]
+                self.waypoint = go_x_dist_in_dir(self.waypoint, self.instruction.target, 0.1)
+
+
+        elif self.state == self.states["move_backwards"]:
+            # modify this to let robot go backwards??????
+            # in position now, time to actually move the lemon
+            error_dist = get_distance_robot_to_goal(self.waypoint, self.ekf.robot.state)
+            # if abs(error_dist) < abs(self.prev_distance_error):
+            if abs(error_dist) > abs(self.dist_tolerance) and abs(error_dist) < abs(self.prev_distance_error):
+                self.prev_distance_error = error_dist
+                control_omega = 0  # only driving straight
+                control_v, _ = PControllerV(self.waypoint, self.ekf.robot.state, self.K_pv)
+                self.command['motion'] = create_motion_command(-control_v, control_omega) # negative here, should work
+            else:
+                self.prev_distance_error = np.inf
+                self.command['motion'] = [0, 0]
+                self.state = self.states["relocate_lemon"]
+
+
+        elif self.state == self.states["relocate_lemon"]:
+            potential_targets = self.detect_class(class_name)
+            if len(potential_targets) == 0:
+                # should've found a lemon, just move on for now
+                self.state = self.states['navigation_arrived_waypoint']
+            else:
+                # found lemon(s), find one which corresponds to the target lemon
+                current_best_lemon = self.find_closest_point_match(self.instruction.target.point, potential_targets)
+
+                # update object map to contain new lemon position
+                self.update_object_map(self.instruction.target.point, current_best_lemon, obj_class)
+                self.update_route_planning_obs(self.instruction.target.point, current_best_lemon, obj_class)
+
+                # check if pushed lemon is obstructing the next path
+                if collision_between_points(self.instruction.point, self.auto_instruction_list[-1].point):
+                    # if so, recompute path to the next objective
+                    next_goal_idx = None
+                    for idx in range(len(self.auto_instruction_list)):
+                        if self.auto_instruction_list[-(i+1)].tag != 0:
+                            next_goal_idx = idx
+                    # generate path to
+                    if next_goal_idx is None:
+                        # no next goal, just stop
+                        self.state = self.states['navigation_arrived_waypoint']
+                    else:
+
+                        target_dest = self.auto_instruction_list[idx + 1].point
+                        rrt = RRT(start=self.instruction.point, goal=target_dest, width=1.4, height=1.4, obstacle_list=self.route_planning_obstacles, expand_dis=0.2, path_resolution=0.04)
+                        route = rrt.planning()
+                        route.reverse()
+
+
+
+    def update_object_map(self, obj_to_update, updated_obj, obj_class):
+        for i, obj in enumerate(self.object_locations[self.class_names.index(obj_class)]):
+            if np.array_equal(obj, obj_to_update):
+                self.object_locations[self.class_names.index(obj_class)][i] = updated_obj
+
+    def update_route_planning_obs(self, obj_to_update, updated_obj, obj_class):
+
+
+
+    def detect_class(self, class_name_tgt):
+        detection = self.yolo_detector.infer(self.img)
+        detections = detection.xywh[0].cpu().numpy()
+        robot_pose = self.ekf.robot.state[:3]
+        potential_targets = []
+
+        for target in detections:
+            class_id = int(target[5])
+            class_name = self.class_names[class_id]
+            if class_name != class_name_tgt:
+                continue
+            box = target[:4]
+            target_world = box_to_world(box, robot_pose, class_name, self.camera_matrix[0][0])
+            confidence = target[4]
+            distance_from_robot = np.hypot(target_world[0] - self.ekf.robot.state[0],
+                                           target_world[1] - self.ekf.robot.state[1])
+            if distance_from_robot < self.estimation_threshold and confidence > self.confidence_threshold:
+                print("valid")
+                potential_targets.append((target_world, distance_from_robot))
+
+        return potential_targets
+
                 
     def generate_instruction_list(self):
     
         start_point = np.array([self.ekf.robot.state[0][0], self.ekf.robot.state[1][0]])
-        all_obstacles = []
+        self.route_planning_obstacles = []
         for entry in self.object_locations[0]:
-            all_obstacles.append(CircleT(entry[0], entry[1], self.r_true_apple, 0))
+            self.route_planning_obstacles.append(CircleT(entry[0], entry[1], self.r_true_apple, 0))
 
         for entry in self.object_locations[1]:
-            all_obstacles.append(CircleT(entry[0], entry[1], self.r_true_lemon, 1))
+            self.route_planning_obstacles.append(CircleT(entry[0], entry[1], self.r_true_lemon, 1))
     
         for entry in self.object_locations[2]:
-            all_obstacles.append(CircleT(entry[0], entry[1], self.r_true_person, 2))
+            self.route_planning_obstacles.append(CircleT(entry[0], entry[1], self.r_true_person, 2))
     
         for i in range(int(self.ekf.markers.size/2)):
-            all_obstacles.append(CircleT(self.ekf.markers[0, i], self.ekf.markers[1, i], self.r_true_marker, 3))
+            self.route_planning_obstacles.append(CircleT(self.ekf.markers[0, i], self.ekf.markers[1, i], self.r_true_marker, 3))
                     
 
         lemon_not_done = objects_not_done(self.object_locations[0], self.object_locations[1], self.object_locations[2])
@@ -745,14 +818,14 @@ class Operate:
         print(f"Lemons- {lemon_not_done}")
         
         # TEMP
-        #lemon_not_done = list(self.object_locations[1])
+        # lemon_not_done = list(self.object_locations[1])
         
-        instructions, pathlength, log = generate_fruit_path(0, 0, lemon_not_done, all_obstacles, start_point, 20)
+        instructions, pathlength, log = generate_fruit_path(0, 0, lemon_not_done, self.route_planning_obstacles, start_point, 20)
 
         print("nstructions generated")
         print(log)
         animate_path_x(np.array([n.point for n in instructions]), (-1.5, 1.5), (-1.5, 1.5), all_obstacles)
-        #plt.show()
+        # plt.show()
         plt.savefig("rrt.png")
         
         
