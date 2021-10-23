@@ -681,6 +681,7 @@ class Operate:
 
                 # update object map to contain new lemon position
                 self.update_object_map(self.instruction.target.point, current_best_lemon, obj_class)
+                self.update_route_planning_obs(self.instruction.target.point, current_best_lemon)
 
                 # calculate new waypoint(s) to push lemon parallel to previous trajectory
                 prev_traj = (self.instruction.point, self.auto_instruction_list[-1].point)  # src, dest
@@ -742,10 +743,10 @@ class Operate:
 
                 # update object map to contain new lemon position
                 self.update_object_map(self.instruction.target.point, current_best_lemon, obj_class)
-                self.update_route_planning_obs(self.instruction.target.point, current_best_lemon, obj_class)
+                self.update_route_planning_obs(self.instruction.target.point, current_best_lemon)
 
                 # check if pushed lemon is obstructing the next path
-                if collision_between_points(self.instruction.point, self.auto_instruction_list[-1].point):
+                if collision_between_points(self.instruction.point, self.auto_instruction_list[-1].point, self.route_planning_obstacles):
                     # if so, recompute path to the next objective
                     next_goal_idx = None
                     for idx in range(len(self.auto_instruction_list)):
@@ -756,12 +757,14 @@ class Operate:
                         # no next goal, just stop
                         self.state = self.states['navigation_arrived_waypoint']
                     else:
-
-                        target_dest = self.auto_instruction_list[idx + 1].point
+                        target_dest = self.auto_instruction_list[-(next_goal_idx + 1) + 1].point
                         rrt = RRT(start=self.instruction.point, goal=target_dest, width=1.4, height=1.4, obstacle_list=self.route_planning_obstacles, expand_dis=0.2, path_resolution=0.04)
                         route = rrt.planning()
-                        route.reverse()
-
+                        #route.reverse() # ???
+                        new_nav_instr = [Instruction(n, 0) for n in route]
+                        self.auto_instruction_list = self.auto_instruction_list[:-(next_goal_idx + 1)] # slice off old instructions
+                        self.auto_instruction_list += new_nav_instr
+                        self.state = self.states['navigation_arrived_waypoint']
 
 
     def update_object_map(self, obj_to_update, updated_obj, obj_class):
@@ -769,8 +772,11 @@ class Operate:
             if np.array_equal(obj, obj_to_update):
                 self.object_locations[self.class_names.index(obj_class)][i] = updated_obj
 
-    def update_route_planning_obs(self, obj_to_update, updated_obj, obj_class):
 
+    def update_route_planning_obs(self, obj_to_update, updated_obj):
+        for i, obj in enumerate(self.route_planning_obstacles):
+            if np.array_equal(obj.center, obj_to_update):
+                self.route_planning_obstacles[i] = updated_obj
 
 
     def detect_class(self, class_name_tgt):
