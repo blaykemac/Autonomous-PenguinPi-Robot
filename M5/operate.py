@@ -192,7 +192,7 @@ class Operate:
         self.modified_width = self.default_width
         self.modified_height = self.default_height
         
-        if not args.nogui:
+        if args.gui:
             self.u0 = self.semiauto_gui_width / 2 + self.default_width # the coordinate transformation from the overall gui window pixel origin to the center of the custom gui
             self.v0 = self.default_height / 2 # the coorrdinate transformation from the overall gui window pixel origin to the center of the custom gui
             self.RADIUS = 15 # the radius of the objects in pixels for gui
@@ -390,7 +390,7 @@ class Operate:
         #return canvas #not sure why this was being returned, this is useless for us though
         
         # if using semiauto GUI, paint that too
-        if not self.args.nogui:
+        if self.args.gui:
             # if reading object coordinates from TRUEMAP instead of through SLAM for semiauto GUI
             if self.args.truemap:
                 pygame.draw.rect(self.canvas, self.WHITE, pygame.Rect(self.default_width, 0, self.semiauto_gui_width, self.default_height))
@@ -558,7 +558,7 @@ class Operate:
                 self.quit = True
                 
             # check for mouse input
-            if event.type == pygame.MOUSEBUTTONDOWN and not self.args.nogui:
+            if event.type == pygame.MOUSEBUTTONDOWN and self.args.gui:
                 pos = pygame.mouse.get_pos()
                 
                 # flag that tells us if the gui has been clicked (used to help auto navigation)

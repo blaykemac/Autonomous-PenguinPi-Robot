@@ -18,8 +18,8 @@ if __name__ == "__main__":
     parser.add_argument("--save_data", action='store_true')
     parser.add_argument("--play_data", action='store_true')
     parser.add_argument("--ckpt", default='weights/best.pt') # specifies nn model path
-    parser.add_argument("--nogui", action='store_true') # disables semiauto GUI
-    parser.add_argument("--auto", action='store_true') # enable full auto delivery
+    parser.add_argument("--gui", action='store_true') # disables semiauto GUI
+    parser.add_argument("--man", action='store_true') # enable full auto delivery
     parser.add_argument("--load_slam_cv", action='store_true') # load map and object locations
     parser.add_argument("--load_slam", action="store_true")
   
