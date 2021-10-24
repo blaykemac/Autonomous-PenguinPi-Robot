@@ -125,9 +125,6 @@ class Operate:
         else:
             self.object_locations = [[None, None, None], [None, None, None], [None, None, None]] # [[apples_xy], [lemons_xy], [persons_xy]] Initialise as None until we have merged our estimations
 
-        #DELETE LATER
-        print(self.object_locations)
-
         self.estimation_threshold = 1
         self.object_locations_premerge = [[], [], []]
         self.inference_buffer = [[], [], []]
@@ -142,7 +139,8 @@ class Operate:
         self.turning = True
         self.keyboard_overridden = False
         self.prev_distance_error = np.inf
-        self.states = {"manual": 0, "begin_automation" : 1, "navigation_turning" : 2, "navigation_forward": 3, "navigation_arrived_waypoint" : 4, "navigation_complete" : 5}
+        self.states = {"manual": 0, "begin_automation" : 1, "navigation_turning" : 2, "navigation_forward": 3, "navigation_arrived_waypoint" : 4,
+                       "navigation_complete" : 5, "turn_to_lemon": 6, "track_lemon": 7, "push_lemon": 8, "relocate_lemon": 9, "move_backwards": 10}
         self.state = self.states["manual"]
         
         # compute the controller gains, tolerances and parameters
@@ -426,27 +424,28 @@ class Operate:
             
                 for apple in self.object_locations[0]:
                     if apple is not None:
-                        pos = world_to_pix(apple[1], apple[0], self.u0, self.v0, self.semiauto_gui_width)
+                        pos = world_to_pix(apple[0], apple[1], self.u0, self.v0, self.semiauto_gui_width)
                         pygame.draw.circle(self.canvas, self.RED, pos, self.RADIUS)
                     
                 for lemon in self.object_locations[1]:
                     if lemon is not None:
-                        pos = world_to_pix(lemon[1], lemon[0], self.u0, self.v0, self.semiauto_gui_width)
+                        pos = world_to_pix(lemon[0], lemon[1], self.u0, self.v0, self.semiauto_gui_width)
                         pygame.draw.circle(self.canvas, self.YELLOW, pos, self.RADIUS)
                     
                 for person in self.object_locations[2]:
                     if person is not None:
-                        pos = world_to_pix(person[1], person[0], self.u0, self.v0, self.semiauto_gui_width)
+                        pos = world_to_pix(person[0], person[1], self.u0, self.v0, self.semiauto_gui_width)
                         pygame.draw.circle(self.canvas, self.BLACK, pos, self.RADIUS)
-                """
-                for index, aruco in enumerate(self.aruco_gt):
-                    pos = world_to_pix(aruco[1], aruco[0], self.u0, self.v0, self.semiauto_gui_width)
+                # for index, aruco in enumerate(self.ekf.markers)
+                for index in range(self.ekf.markers.size//2):
+                    aruco = self.ekf.markers[:, index]
+                    pos = world_to_pix(aruco[0], aruco[1], self.u0, self.v0, self.semiauto_gui_width)
                     text_offset = (5, 5)
                     text_pos = tuple(map(lambda i, j: i + j, pos, text_offset))
                     pygame.draw.circle(self.canvas, self.BLUE, text_pos, self.RADIUS)
-                    text = self.font.render(str(index + 1), True, self.WHITE)
+                    text = self.font.render(str(self.ekf.taglist[index]), True, self.WHITE)
                     self.canvas.blit(text, pos)
-                    """
+
 
     @staticmethod
     def draw_pygame_window(canvas, cv2_img, position):
@@ -557,49 +556,26 @@ class Operate:
             elif event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
                 self.quit = True
                 
-            # check for mouse input
-            if event.type == pygame.MOUSEBUTTONDOWN and self.args.gui:
+            # check for mouse input --- CURRENTLY CHECKING ALL MOUSE BUTTONS _ CHANGE TO LEFT AND RIGHT
+            if event.type == pygame.MOUSEBUTTONDOWN and self.args.gui and event.button == 3:
+                dist_reverse = 0.1
+                x = self.ekf.robot.state[0][0]
+                y = self.ekf.robot.state[1][0]
+                angle = self.ekf.robot.state[2][0]
+                collinear_point = np.array([x, y]) - np.array([np.cos(angle), np.sin(angle)])
+                self.waypoint = go_x_dist_in_dir(np.array([x, y]), collinear_point, dist_reverse)
+                self.state = self.states["move_backwards"]
+
+            if event.type == pygame.MOUSEBUTTONDOWN and self.args.gui and event.button == 1:
                 pos = pygame.mouse.get_pos()
                 
                 # flag that tells us if the gui has been clicked (used to help auto navigation)
-                self.gui_clicked = True 
-                
-                """
-                # set manual waypoint and navigate safely 
-                if pos[0] >= self.default_width and self.args.auto:
+                self.gui_clicked = True
+
+                if pos[0] >= self.default_width:
                     x,y = pix_to_world(pos[0], pos[1], self.u0, self.v0, self.semiauto_gui_width)
-                    
-                    start_point = np.array([self.ekf.robot.state[0][0], self.ekf.robot.state[1][0]])
-                    finish_point = np.array([x,y])
-                                        
-                    self.keyboard_overridden = False
-                    self.finished_navigating = False
-                    self.turning = True
-                    
-                    print("Automated Waypoint Delivery Beginning")
-                    
-                    # this list returns the sequence of waypoints from finish to start (so its in reverse order), including the robot initial position
-                    self.auto_waypoint_list = self.generate_waypoint_list(start_point, finish_point)
-                    
-                    # we remove the last element of the list, because generate_waypoint_list 
-                    # includes the starting position of the robot, which we are already located at
-                    if len(self.auto_waypoint_list) > 0:
-                        self.auto_waypoint_list.pop()
-                    else:
-                        print("Failed to generate waypoint list")
-                                    
-                # then we are setting a manual waypoint through the GUI
-                elif pos[0] >= self.default_width:
-                    x,y = pix_to_world(pos[0], pos[1], self.u0, self.v0, self.semiauto_gui_width)
-                    self.waypoint = np.array([x,y])
-                    self.keyboard_overridden = False
-                    self.finished_navigating = False
-                    self.turning = True
-                    
-                    """
-            #if self.keyboard_overridden:
-                #self.finished_navigating = True
-                #self.turning = True
+                    self.waypoint = np.array([x, y])
+                    self.state = self.states["navigation_turning"]
                 
         if self.quit:
             pygame.quit()
@@ -642,18 +618,26 @@ class Operate:
             else:
                 self.prev_distance_error = np.inf
                 self.command['motion'] = [0,0]
+
                 self.state = self.states["navigation_arrived_waypoint"]
                 
         elif self.state == self.states["navigation_arrived_waypoint"]:
-            if len(self.auto_instruction_list) > 0:
-                self.instruction = self.auto_instruction_list.pop()
-                self.waypoint = self.instruction.point
-                if self.instruction.tag == 0: # regular navigation waypoint
-                    self.state = self.states["navigation_turning"]
-                elif self.instruction.tag == 1: # lemon moving waypoint
-                    self.state = self.states["turn_to_lemon"]
+            # we have moved blindly. go back to waiting for new command
+            if self.args.gui:
+                self.state = self.states["manual"]
             else:
-                self.state = self.states["navigation_complete"]
+                if len(self.auto_instruction_list) > 0:
+                    self.instruction = self.auto_instruction_list.pop()
+                    self.waypoint = self.instruction.point
+                    """
+                    if self.instruction.tag == 0: # regular navigation waypoint
+                        self.state = self.states["navigation_turning"]
+                    elif self.instruction.tag == 1: # lemon moving waypoint
+                        self.state = self.states["turn_to_lemon"]
+                    """
+                    self.state = self.states["navigation_turning"]
+                else:
+                    self.state = self.states["navigation_complete"]
 
         # needed something to do just a turn before tracking the lemon, this is just copy paste nav turning state
         elif self.state == self.states["turn_to_lemon"]:
@@ -685,7 +669,7 @@ class Operate:
 
                 # calculate new waypoint(s) to push lemon parallel to previous trajectory
                 prev_traj = (self.instruction.point, self.auto_instruction_list[-1].point)  # src, dest
-                new_traj = calculate_new_traj_parallel(previous_traj, intended_lemon_target[0:2], current_best_lemon)
+                new_traj = calculate_new_traj_parallel(prev_traj, intended_lemon_target[0:2], current_best_lemon)
                 # if new trajectory is very similar to previous one, traj is probably correct, may now push lemon
                 matched = compare_traj(prev_traj, new_traj)
                 if matched:
@@ -729,7 +713,10 @@ class Operate:
             else:
                 self.prev_distance_error = np.inf
                 self.command['motion'] = [0, 0]
-                self.state = self.states["relocate_lemon"]
+                if self.args.gui:
+                    self.state = self.states["manual"]
+                else:
+                    self.state = self.states["relocate_lemon"]
 
 
         elif self.state == self.states["relocate_lemon"]:
@@ -822,18 +809,21 @@ class Operate:
         lemon_not_done = objects_not_done(self.object_locations[0], self.object_locations[1], self.object_locations[2])
         print("Objects not done")
         print(f"Lemons- {lemon_not_done}")
-        
+
         # TEMP
         # lemon_not_done = list(self.object_locations[1])
-        
-        instructions, pathlength, log = generate_fruit_path(0, 0, lemon_not_done, self.route_planning_obstacles, start_point, 20)
+        apple_not_done = list(self.object_locations[0])
+        fruit_not_done = lemon_not_done + apple_not_done
 
-        print("nstructions generated")
+        instructions, pathlength, log = generate_fruit_path(0, 0, fruit_not_done, self.route_planning_obstacles, start_point, 20)
+
+        print("instructions generated")
         print(log)
-        animate_path_x(np.array([n.point for n in instructions]), (-1.5, 1.5), (-1.5, 1.5), all_obstacles)
+        animate_path_x(np.array([n.point for n in instructions]), (-1.5, 1.5), (-1.5, 1.5), self.route_planning_obstacles)
         # plt.show()
         plt.savefig("rrt.png")
-        
+
+
         
         return instructions
         #rrt = RRT(start=start_point, goal=goal_point, width=1.4, height=1.4, obstacle_list=all_obstacles, expand_dis=0.2, path_resolution=0.04)
